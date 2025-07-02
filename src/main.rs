@@ -55,8 +55,11 @@ fn compute_next_day_balance(config: &Config, balance: (chrono::NaiveDate, Decima
     let next_date = balance.0 + chrono::Duration::days(1);
     let mut next_balance = balance.1;
 
-    if config.salary.is_some() && next_date.day() == config.salary.as_ref().unwrap().day {
-        next_balance += config.salary.as_ref().unwrap().amount;
+    if let Some(salary) = &config.salary {
+        let salary = salary;
+        if next_date.day() == salary.day {
+            next_balance += salary.amount;
+        }
     }
     if next_date.day() == config.mortgage.deduction_day {
         next_balance -= config.mortgage.deduction_amount;
