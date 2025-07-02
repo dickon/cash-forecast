@@ -6,7 +6,7 @@ use std::fs;
 #[derive(Debug, Deserialize)]
 struct Config {
     mortgage: Mortgage,
-    initial_balance: Decimal,
+    opening: Opening,
     #[serde(default = "default_currency_symbol")]
     currency_symbol: String,
 }
@@ -15,6 +15,12 @@ struct Config {
 struct Mortgage {
     deduction_amount: Decimal,
     deduction_day: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct Opening {
+    date: String,
+    balance: Decimal,
 }
 
 fn default_currency_symbol() -> String {
@@ -29,7 +35,7 @@ fn main() {
     // Set today to 1st Jan 2025
     let today = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).expect("Invalid date");
 
-    let balance = (today, config.initial_balance);
+    let balance = (today, config.opening.balance);
 
     let mut baln = balance;
 
