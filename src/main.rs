@@ -26,7 +26,8 @@ fn main() {
     let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
     let config: Config = serde_yaml::from_str(&yaml).expect("Failed to parse YAML");
 
-    let today = chrono::Local::now().date_naive();
+    // Set today to 1st Jan 2025
+    let today = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).expect("Invalid date");
 
     let balance = (today, config.initial_balance);
 
