@@ -1,0 +1,4 @@
+mortgage:
+  deduction_amount: 123.45
+  deduction_day: 1
+initial_balance: 10000.00

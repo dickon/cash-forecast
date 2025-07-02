@@ -1,25 +1,42 @@
-fn main() {
-    // work out todays date as a Date, not a DateTime
-    // this is so that we can add days to it without worrying about the time of day
-    // we can then use the DateTime to print the date in a human readable format
-    // and to calculate the balance in a human readable format      
+use chrono::Datelike;
+use rust_decimal::Decimal;
+use serde::Deserialize;
+use std::fs;
 
-    
-    let today = chrono::Local::now().date_naive();
-
-    let balance = (today, 10000*100);
-
-    let bal2 = (balance.0 + chrono::Duration::days(1), balance.1 - 438912);
-
-
-    print_balance(balance);
-    print_balance(bal2);
+#[derive(Debug, Deserialize)]
+struct Config {
+    mortgage: Mortgage,
+    initial_balance: Decimal,
 }
 
+#[derive(Debug, Deserialize)]
+struct Mortgage {
+    deduction_amount: Decimal,
+    deduction_day: u32,
+}
 
-fn print_balance(balance: (chrono::NaiveDate, i32)) {
+fn main() {
+    // Load config from YAML
+    let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
+    let config: Config = serde_yaml::from_str(&yaml).expect("Failed to parse YAML");
+
+    let today = chrono::Local::now().date_naive();
+
+    let balance = (today, config.initial_balance);
+
+    let mut baln = balance;
+
+    for _ in 0..60 {
+        baln = (baln.0 + chrono::Duration::days(1), baln.1);
+        if baln.0.day() == config.mortgage.deduction_day {
+            baln.1 -= config.mortgage.deduction_amount;
+        }
+        print_balance(baln);
+    }
+}
+
+fn print_balance(balance: (chrono::NaiveDate, Decimal)) {
     let date = balance.0;
-    let v = balance.1 as f64 / 100.0;
-    println!("{date} {v}");
+    println!("{date} {v}", date = date, v = balance.1);
 }
 
