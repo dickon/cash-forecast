@@ -35,21 +35,21 @@ fn main() {
     // Set today to 1st Jan 2025
     let today = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).expect("Invalid date");
 
-    let balance = (today, config.opening.balance);
-
-    let mut baln = balance;
+    let mut baln = (today, config.opening.balance);
 
     for _ in 0..60 {
-        compute_next_day_balance(&config, &mut baln);
+        baln = compute_next_day_balance(&config, baln);
         print_balance(baln, &config.currency_symbol);
     }
 }
 
-fn compute_next_day_balance(config: &Config, baln: &mut (chrono::NaiveDate, Decimal)) {
-    *baln = (baln.0 + chrono::Duration::days(1), baln.1);
-    if baln.0.day() == config.mortgage.deduction_day {
-        baln.1 -= config.mortgage.deduction_amount;
+fn compute_next_day_balance(config: &Config, baln: (chrono::NaiveDate, Decimal)) -> (chrono::NaiveDate, Decimal) {
+    let next_date = baln.0 + chrono::Duration::days(1);
+    let mut next_balance = baln.1;
+    if next_date.day() == config.mortgage.deduction_day {
+        next_balance -= config.mortgage.deduction_amount;
     }
+    (next_date, next_balance)
 }
 
 fn print_balance(balance: (chrono::NaiveDate, Decimal), currency_symbol: &str) {
@@ -99,11 +99,11 @@ currency_symbol: "£"
     #[test]
     fn test_compute_next_day_balance_no_deduction() {
         let config = make_config(2);
-        let mut baln = (
+        let baln = (
             chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
             dec!(10000.00),
         );
-        compute_next_day_balance(&config, &mut baln);
+        let baln = compute_next_day_balance(&config, baln);
         assert_eq!(baln.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 2).unwrap());
         assert_eq!(baln.1, dec!(10000.00) - dec!(123.45));
     }
@@ -111,11 +111,11 @@ currency_symbol: "£"
     #[test]
     fn test_compute_next_day_balance_with_deduction() {
         let config = make_config(3);
-        let mut baln = (
+        let baln = (
             chrono::NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
             dec!(10000.00),
         );
-        compute_next_day_balance(&config, &mut baln);
+        let baln = compute_next_day_balance(&config, baln);
         assert_eq!(baln.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 3).unwrap());
         assert_eq!(baln.1, dec!(10000.00) - dec!(123.45));
     }
@@ -123,11 +123,11 @@ currency_symbol: "£"
     #[test]
     fn test_compute_next_day_balance_no_deduction_other_day() {
         let config = make_config(5);
-        let mut baln = (
+        let baln = (
             chrono::NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
             dec!(10000.00),
         );
-        compute_next_day_balance(&config, &mut baln);
+        let baln = compute_next_day_balance(&config, baln);
         assert_eq!(baln.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 3).unwrap());
         assert_eq!(baln.1, dec!(10000.00));
     }
