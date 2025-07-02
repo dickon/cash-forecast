@@ -7,12 +7,18 @@ use std::fs;
 struct Config {
     mortgage: Mortgage,
     initial_balance: Decimal,
+    #[serde(default = "default_currency_symbol")]
+    currency_symbol: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct Mortgage {
     deduction_amount: Decimal,
     deduction_day: u32,
+}
+
+fn default_currency_symbol() -> String {
+    "£".to_string()
 }
 
 fn main() {
@@ -31,12 +37,13 @@ fn main() {
         if baln.0.day() == config.mortgage.deduction_day {
             baln.1 -= config.mortgage.deduction_amount;
         }
-        print_balance(baln);
+        print_balance(baln, &config.currency_symbol);
     }
 }
 
-fn print_balance(balance: (chrono::NaiveDate, Decimal)) {
+fn print_balance(balance: (chrono::NaiveDate, Decimal), currency_symbol: &str) {
     let date = balance.0;
-    println!("{date} {v}", date = date, v = balance.1);
+    // Format to 2 decimal places and prefix with £
+    println!("{date} {symbol}{v:.2}", date = date, symbol = currency_symbol, v = balance.1);
 }
 
