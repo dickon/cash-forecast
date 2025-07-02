@@ -54,3 +54,28 @@ fn print_balance(balance: (chrono::NaiveDate, Decimal), currency_symbol: &str) {
     println!("{date} {symbol}{v:.2}", date = date, symbol = currency_symbol, v = balance.1);
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rust_decimal_macros::dec;
+
+    #[test]
+    fn test_config_parsing() {
+        let yaml = r#"
+mortgage:
+  deduction_amount: 123.45
+  deduction_day: 1
+opening:
+  date: "2025-01-01"
+  balance: 10000.00
+currency_symbol: "£"
+"#;
+        let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
+        assert_eq!(config.mortgage.deduction_amount, dec!(123.45));
+        assert_eq!(config.mortgage.deduction_day, 1);
+        assert_eq!(config.opening.date, "2025-01-01");
+        assert_eq!(config.opening.balance, dec!(10000.00));
+        assert_eq!(config.currency_symbol, "£");
+    }
+}
+
