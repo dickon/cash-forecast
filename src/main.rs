@@ -33,7 +33,7 @@ fn main() {
     let config: Config = serde_yaml::from_str(&yaml).expect("Failed to parse YAML");
 
     // Set today to 1st Jan 2025
-    let today = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).expect("Invalid date");
+    let today = chrono::NaiveDate::parse_from_str(&config.opening.date, "%Y-%m-%d").expect("Invalid date in config");
 
     let mut baln = (today, config.opening.balance);
 
