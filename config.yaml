@@ -5,6 +5,7 @@ mortgage:
 salary:
   amount: 2000.00
   day: 15
-opening:
-  date: 2025-01-01
-  balance: 10000.00
+current_account:
+  position:
+    date: 2025-01-01
+    balance: 10000.00

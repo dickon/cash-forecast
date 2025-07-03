@@ -6,7 +6,7 @@ use std::fs;
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
     mortgage: Mortgage,
-    opening: Position,
+    current_account: CurrentAccount,
     #[serde(default = "default_currency_symbol")]
     currency_symbol: String,
     #[serde(default)]
@@ -17,6 +17,11 @@ struct Config {
 struct Mortgage {
     deduction_amount: Decimal,
     deduction_day: u32,
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+struct CurrentAccount {
+    position: Position,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -40,10 +45,10 @@ fn main() {
     let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
     let config: Config = serde_yaml::from_str(&yaml).expect("Failed to parse YAML");
 
-    // Set today to 1st Jan 2025
-    let today = chrono::NaiveDate::parse_from_str(&config.opening.date, "%Y-%m-%d").expect("Invalid date in config");
+    let today = chrono::NaiveDate::parse_from_str(&config.current_account.position.date, "%Y-%m-%d")
+        .expect("Invalid date in config");
 
-    let mut balance = (today, config.opening.balance);
+    let mut balance = (today, config.current_account.position.balance);
 
     for _ in 0..60 {
         balance = compute_next_day_balance(&config, balance);
@@ -84,9 +89,11 @@ mod tests {
                 deduction_amount: dec!(123.45),
                 deduction_day: mortgage_deduction_day,
             },
-            opening: Position {
-                date: "2025-01-01".to_string(),
-                balance: dec!(10000.00),
+            current_account: CurrentAccount {
+                position: Position {
+                    date: "2025-01-01".to_string(),
+                    balance: dec!(10000.00),
+                },
             },
             currency_symbol: "£".to_string(),
             salary: None,
@@ -99,17 +106,18 @@ mod tests {
 mortgage:
   deduction_amount: 123.45
   deduction_day: 1
-opening:
-  date: "2025-01-01"
-  balance: 10000.00
+current_account:
+  position:
+    date: "2025-01-01"
+    balance: 10000.00
 currency_symbol: "£"
 "#;
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
         assert_eq!(config, make_config(1));
         assert_eq!(config.mortgage.deduction_amount, dec!(123.45));
         assert_eq!(config.mortgage.deduction_day, 1);
-        assert_eq!(config.opening.date, "2025-01-01");
-        assert_eq!(config.opening.balance, dec!(10000.00));
+        assert_eq!(config.current_account.position.date, "2025-01-01");
+        assert_eq!(config.current_account.position.balance, dec!(10000.00));
         assert_eq!(config.currency_symbol, "£");
     }
 
@@ -206,16 +214,17 @@ currency_symbol: "£"
 mortgage:
   deduction_amount: 123.45
   deduction_day: 1
-opening:
-  date: "2025-01-01"
-  balance: 10000.00
+current_account:
+  position:
+    date: "2025-01-01"
+    balance: 10000.00
 currency_symbol: "£"
 salary:
   amount: 2500.00
   day: 28
 "#;
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
-        assert_eq!(config.salary.as_ref().unwrap().amount, dec!(2500.00));
+        assert_eq!(config.salary, Some(Salary { amount: dec!(2500.00), day: 28 }));        assert_eq!(config.currency_symbol, "£");        assert_eq!(config.current_account.position.balance, dec!(10000.00));        assert_eq!(config.current_account.position.date, "2025-01-01");        assert_eq!(config.mortgage.deduction_day, 1);        assert_eq!(config.mortgage.deduction_amount, dec!(123.45));        assert_eq!(config.salary.as_ref().unwrap().amount, dec!(2500.00));
         assert_eq!(config.salary.as_ref().unwrap().day, 28);
     }    
 
