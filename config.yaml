@@ -1,6 +1,7 @@
 mortgage:
   deduction_amount: 123.45
   deduction_day: 1
+  balance: 50000.00
 salary:
   amount: 2000.00
   day: 15

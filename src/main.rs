@@ -3,7 +3,7 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 use std::fs;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 struct Config {
     mortgage: Mortgage,
     opening: Opening,
@@ -13,19 +13,19 @@ struct Config {
     salary: Option<Salary>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 struct Mortgage {
     deduction_amount: Decimal,
     deduction_day: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 struct Opening {
     date: String,
     balance: Decimal,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 struct Salary {
     amount: Decimal,
     day: u32,
@@ -105,6 +105,7 @@ opening:
 currency_symbol: "£"
 "#;
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
+        assert_eq!(config, make_config(1));
         assert_eq!(config.mortgage.deduction_amount, dec!(123.45));
         assert_eq!(config.mortgage.deduction_day, 1);
         assert_eq!(config.opening.date, "2025-01-01");
