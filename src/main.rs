@@ -17,6 +17,8 @@ struct Config {
 struct Mortgage {
     deduction_amount: Decimal,
     deduction_day: u32,
+    #[serde(default)]
+    position: Option<Position>
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -88,6 +90,7 @@ mod tests {
             mortgage: Mortgage {
                 deduction_amount: dec!(123.45),
                 deduction_day: mortgage_deduction_day,
+                position: None
             },
             current_account: CurrentAccount {
                 position: Position {
