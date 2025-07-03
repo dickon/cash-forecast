@@ -6,7 +6,7 @@ use std::fs;
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
     mortgage: Mortgage,
-    opening: Opening,
+    opening: Position,
     #[serde(default = "default_currency_symbol")]
     currency_symbol: String,
     #[serde(default)]
@@ -20,7 +20,7 @@ struct Mortgage {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
-struct Opening {
+struct Position {
     date: String,
     balance: Decimal,
 }
@@ -84,7 +84,7 @@ mod tests {
                 deduction_amount: dec!(123.45),
                 deduction_day: mortgage_deduction_day,
             },
-            opening: Opening {
+            opening: Position {
                 date: "2025-01-01".to_string(),
                 balance: dec!(10000.00),
             },
