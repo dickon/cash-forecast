@@ -1,7 +1,7 @@
 mortgage:
   deduction_amount: 123.45
   deduction_day: 1
-current_account:
+accounts:
   main:
     position:
       date: "2025-01-01"

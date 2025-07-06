@@ -6,7 +6,7 @@ use std::fs;
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
     mortgage: Mortgage,
-    current_account: std::collections::HashMap<String, CurrentAccount>,
+    accounts: std::collections::HashMap<String, CurrentAccount>,
     #[serde(default = "default_currency_symbol")]
     currency_symbol: String,
     #[serde(default)]
@@ -48,7 +48,7 @@ fn main() {
     let config: Config = serde_yaml::from_str(&yaml).expect("Failed to parse YAML");
 
     // Use the first account in the map for demonstration
-    let (_, account) = config.current_account.iter().next().expect("No accounts found");
+    let (_, account) = config.accounts.iter().next().expect("No accounts found");
     let today = chrono::NaiveDate::parse_from_str(&account.position.date, "%Y-%m-%d")
         .expect("Invalid date in config");
 
@@ -105,7 +105,7 @@ mod tests {
                 deduction_day: mortgage_deduction_day,
                 position: None
             },
-            current_account: accounts,
+            accounts,
             currency_symbol: "£".to_string(),
             salary: None,
         }
@@ -117,7 +117,7 @@ mod tests {
 mortgage:
   deduction_amount: 123.45
   deduction_day: 1
-current_account:
+accounts:
   main:
     position:
       date: "2025-01-01"
@@ -126,7 +126,7 @@ currency_symbol: "£"
 "#;
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
         assert_eq!(config, make_config(1));
-        let account = config.current_account.get("main").unwrap();
+        let account = config.accounts.get("main").unwrap();
         assert_eq!(account.position.date, "2025-01-01");
         assert_eq!(account.position.balance, dec!(10000.00));
         assert_eq!(config.currency_symbol, "£");
@@ -225,7 +225,7 @@ currency_symbol: "£"
 mortgage:
   deduction_amount: 123.45
   deduction_day: 1
-current_account:
+accounts:
   main:
     position:
       date: "2025-01-01"
@@ -236,7 +236,7 @@ salary:
   day: 28
 "#;
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
-        assert_eq!(config.salary, Some(Salary { amount: dec!(2500.00), day: 28 }));        assert_eq!(config.currency_symbol, "£");        let account = config.current_account.get("main").unwrap();        assert_eq!(account.position.balance, dec!(10000.00));        assert_eq!(account.position.date, "2025-01-01");        assert_eq!(config.mortgage.deduction_day, 1);        assert_eq!(config.mortgage.deduction_amount, dec!(123.45));        assert_eq!(config.salary.as_ref().unwrap().amount, dec!(2500.00));
+        assert_eq!(config.salary, Some(Salary { amount: dec!(2500.00), day: 28 }));        assert_eq!(config.currency_symbol, "£");        let account = config.accounts.get("main").unwrap();        assert_eq!(account.position.balance, dec!(10000.00));        assert_eq!(account.position.date, "2025-01-01");        assert_eq!(config.mortgage.deduction_day, 1);        assert_eq!(config.mortgage.deduction_amount, dec!(123.45));        assert_eq!(config.salary.as_ref().unwrap().amount, dec!(2500.00));
         assert_eq!(config.salary.as_ref().unwrap().day, 28);
     }    
 
