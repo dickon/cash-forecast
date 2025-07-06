@@ -6,9 +6,10 @@ use std::fs;
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
     transactions: Vec<Transaction>,
-    accounts: std::collections::HashMap<String, CurrentAccount>,
+    accounts: std::collections::HashMap<String, Decimal>,
     #[serde(default = "default_currency_symbol")]
     currency_symbol: String,
+    #[serde(default = "default_start_date")]
     start_date: chrono::NaiveDate,
 }
 
@@ -27,13 +28,12 @@ enum Transaction {
     },
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
-struct CurrentAccount {
-    balance: Decimal,
-}
-
 fn default_currency_symbol() -> String {
     "£".to_string()
+}
+
+fn default_start_date() -> chrono::NaiveDate {
+    chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()
 }
 
 fn main() {
@@ -47,15 +47,14 @@ fn main() {
     let mut balances: std::collections::HashMap<String, Decimal> = config
         .accounts
         .iter()
-        .map(|(name, account)| (name.clone(), account.balance))
+        .map(|(name, &balance)| (name.clone(), balance))
         .collect();
 
     for _ in 0..600 {
         date = date + chrono::Duration::days(1);
         balances = compute_next_day_balances(&config, &balances, date);
         // Trigger on last day of month
-        let next_day = date + chrono::Duration::days(1);
-        if date.month() != next_day.month() {
+        if date.month() != (date + chrono::Duration::days(1)).month() {
             for (name, balance) in balances.iter() {
                 print_balance_named(name, date, *balance, &config.currency_symbol);
             }
@@ -124,14 +123,8 @@ mod tests {
 
     fn make_config(mortgage_deduction_day: u32) -> Config {
         let accounts = HashMap::from([
-            ("main".to_string(), CurrentAccount {
-                balance: dec!(10000.00),
-                },
-            ),
-            ("mortgage".to_string(), CurrentAccount {
-                balance: dec!(500000.00),
-                },
-            ),
+            ("main".to_string(), dec!(10000.00)),
+            ("mortgage".to_string(), dec!(500000.00)),
         ]);
         Config {
             transactions: vec![
@@ -161,10 +154,8 @@ transactions:
     amount: 2000.00
     day: 6
 accounts:
-  main:
-    balance: 10000.00
-  mortgage:
-    balance: 500000.00
+  main: 10000.00
+  mortgage: 500000.00
 
 currency_symbol: "£"
 start_date: "2025-01-01"
@@ -172,9 +163,10 @@ start_date: "2025-01-01"
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
         assert_eq!(config, make_config(1));
         let account = config.accounts.get("main").unwrap();
-        assert_eq!(account.balance, dec!(10000.00));
+        assert_eq!(*account, dec!(10000.00));
         assert_eq!(config.currency_symbol, "£");
     }
+
 
     #[test]
     fn test_compute_next_day_balances_no_deduction() {
@@ -270,8 +262,7 @@ transactions:
     amount: 2500.00
     day: 28
 accounts:
-  main:
-    balance: 10000.00
+  main: 10000.00
 currency_symbol: "£"
 start_date: "2025-01-01"
 "#;
@@ -279,7 +270,7 @@ start_date: "2025-01-01"
         assert_eq!(config.transactions.len(), 2);
         assert_eq!(config.currency_symbol, "£");
         let account = config.accounts.get("main").unwrap();
-        assert_eq!(account.balance, dec!(10000.00));
+        assert_eq!(*account, dec!(10000.00));
     }
 }
 

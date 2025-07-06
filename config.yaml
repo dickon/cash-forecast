@@ -7,9 +7,7 @@ transactions:
     amount: 2500.00
     day: 26
 accounts:
-  main:
-    balance: 10000.00
-  mortgage:
-    balance: 500000.00
+  main: 10000.00
+  mortgage: 500000.00
 currency_symbol: "£"
 
