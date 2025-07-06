@@ -103,11 +103,6 @@ fn compute_next_day_balances(
     new_balances
 }
 
-fn print_balance(balance: (chrono::NaiveDate, Decimal), currency_symbol: &str) {
-    let date = balance.0;
-    // Format to 2 decimal places and prefix with the configured currency symbol
-    println!("{date} {symbol}{v:.2}", date = date, symbol = currency_symbol, v = balance.1);
-}
 
 fn print_balance_named(name: &str, position: &Position, currency_symbol: &str) {
     println!(
