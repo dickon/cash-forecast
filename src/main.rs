@@ -47,16 +47,22 @@ fn main() {
     let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
     let config: Config = serde_yaml::from_str(&yaml).expect("Failed to parse YAML");
 
-    // Use the first account in the map for demonstration
-    let (_, account) = config.accounts.iter().next().expect("No accounts found");
-    let today = chrono::NaiveDate::parse_from_str(&account.position.date, "%Y-%m-%d")
-        .expect("Invalid date in config");
-
-    let mut balance = (today, account.position.balance);
+    // Create a map of balances for each account
+    let mut balances: std::collections::HashMap<String, (chrono::NaiveDate, Decimal)> = config
+        .accounts
+        .iter()
+        .map(|(name, account)| {
+            let date = chrono::NaiveDate::parse_from_str(&account.position.date, "%Y-%m-%d")
+                .expect("Invalid date in config");
+            (name.clone(), (date, account.position.balance))
+        })
+        .collect();
 
     for _ in 0..60 {
-        balance = compute_next_day_balance(&config, balance);
-        print_balance(balance, &config.currency_symbol);
+        for (name, balance) in balances.iter_mut() {
+            *balance = compute_next_day_balance(&config, *balance);
+            print_balance_named(name, *balance, &config.currency_symbol);
+        }
     }
 }
 
@@ -80,6 +86,17 @@ fn print_balance(balance: (chrono::NaiveDate, Decimal), currency_symbol: &str) {
     let date = balance.0;
     // Format to 2 decimal places and prefix with the configured currency symbol
     println!("{date} {symbol}{v:.2}", date = date, symbol = currency_symbol, v = balance.1);
+}
+
+fn print_balance_named(name: &str, balance: (chrono::NaiveDate, Decimal), currency_symbol: &str) {
+    let date = balance.0;
+    println!(
+        "{name}: {date} {symbol}{v:.2}",
+        name = name,
+        date = date,
+        symbol = currency_symbol,
+        v = balance.1
+    );
 }
 
 #[cfg(test)]
