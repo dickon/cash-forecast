@@ -50,11 +50,13 @@ fn main() {
         .map(|(name, account)| (name.clone(), account.balance))
         .collect();
 
-    for _ in 0..60 {
+    for i in 0..600 {
         date = date + chrono::Duration::days(1);
         balances = compute_next_day_balances(&config, &balances, date);
-        for (name, balance) in balances.iter() {
-            print_balance_named(name, date, *balance, &config.currency_symbol);
+        if i % 12 == 0 {
+            for (name, balance) in balances.iter() {
+                print_balance_named(name, date, *balance, &config.currency_symbol);
+            }
         }
     }
 }
