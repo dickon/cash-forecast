@@ -50,10 +50,12 @@ fn main() {
         .map(|(name, account)| (name.clone(), account.balance))
         .collect();
 
-    for i in 0..600 {
+    for _ in 0..600 {
         date = date + chrono::Duration::days(1);
         balances = compute_next_day_balances(&config, &balances, date);
-        if i % 12 == 0 {
+        // Trigger on last day of month
+        let next_day = date + chrono::Duration::days(1);
+        if date.month() != next_day.month() {
             for (name, balance) in balances.iter() {
                 print_balance_named(name, date, *balance, &config.currency_symbol);
             }
