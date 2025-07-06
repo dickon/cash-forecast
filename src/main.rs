@@ -112,26 +112,23 @@ mod tests {
     use std::collections::HashMap;
 
     fn make_balances() -> HashMap<String, Decimal> {
-        let mut balances = HashMap::new();
-        balances.insert("main".to_string(), dec!(10000.00));
-        balances.insert("mortgage".to_string(), dec!(500000.00));
-        balances
+        HashMap::from([
+            ("main".to_string(), dec!(10000.00)),
+            ("mortgage".to_string(), dec!(500000.00)),
+        ])
     }
 
     fn make_config(mortgage_deduction_day: u32) -> Config {
-        let mut accounts = HashMap::new();
-        accounts.insert(
-            "main".to_string(),
-            CurrentAccount {
+        let accounts = HashMap::from([
+            ("main".to_string(), CurrentAccount {
                 balance: dec!(10000.00),
-            },
-        );
-        accounts.insert(
-            "mortgage".to_string(),
-            CurrentAccount {
+                },
+            ),
+            ("mortgage".to_string(), CurrentAccount {
                 balance: dec!(500000.00),
-            },
-        );
+                },
+            ),
+        ]);
         Config {
             transactions: vec![
                 Transaction::Mortgage {
