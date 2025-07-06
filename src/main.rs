@@ -44,11 +44,7 @@ fn main() {
     let mut date = config.start_date;
 
     // Create a map of balances for each account as Decimal
-    let mut balances: std::collections::HashMap<String, Decimal> = config
-        .accounts
-        .iter()
-        .map(|(name, &balance)| (name.clone(), balance))
-        .collect();
+    let mut balances: std::collections::HashMap<String, Decimal> = config.accounts.clone();
 
     for _ in 0..600 {
         date = date + chrono::Duration::days(1);
