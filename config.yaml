@@ -1,6 +1,10 @@
-mortgage:
-  deduction_amount: 123.45
-  deduction_day: 1
+transactions:
+  - type: mortgage
+    deduction_amount: 123.45
+    deduction_day: 1
+  - type: salary
+    amount: 2500.00
+    day: 26
 accounts:
   main:
     position:
@@ -11,7 +15,4 @@ accounts:
       date: "2025-01-01"
       balance: -500000.00
 currency_symbol: "£"
-salary:
-  amount: 2500.00
-  day: 26
 

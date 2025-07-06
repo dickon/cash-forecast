@@ -5,18 +5,25 @@ use std::fs;
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
-    mortgage: Mortgage,
+    transactions: Vec<Transaction>,
     accounts: std::collections::HashMap<String, CurrentAccount>,
     #[serde(default = "default_currency_symbol")]
     currency_symbol: String,
-    #[serde(default)]
-    salary: Option<Salary>,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
-struct Mortgage {
-    deduction_amount: Decimal,
-    deduction_day: u32
+#[serde(tag = "type", rename_all = "lowercase")]
+enum Transaction {
+    #[serde(rename = "mortgage")]
+    Mortgage {
+        deduction_amount: Decimal,
+        deduction_day: u32,
+    },
+    #[serde(rename = "salary")]
+    Salary {
+        amount: Decimal,
+        day: u32,
+    },
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -28,12 +35,6 @@ struct CurrentAccount {
 struct Position {
     date: String,
     balance: Decimal,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-struct Salary {
-    amount: Decimal,
-    day: u32,
 }
 
 fn default_currency_symbol() -> String {
@@ -60,8 +61,6 @@ fn main() {
     }
 }
 
-
-
 fn compute_next_day_balances(
     config: &Config,
     balances: &std::collections::HashMap<String, Position>,
@@ -74,21 +73,24 @@ fn compute_next_day_balances(
         let next_date = current_date + chrono::Duration::days(1);
         let mut next_balance = position.balance;
 
-        if name == "main" {
-            if let Some(salary) = &config.salary {
-                if next_date.day() == salary.day {
-                    next_balance += salary.amount;
+        for transaction in &config.transactions {
+            match transaction {
+                Transaction::Mortgage { deduction_amount, deduction_day } => {
+                    if next_date.day() == *deduction_day {
+                        if name == "main" {
+                            next_balance -= *deduction_amount;
+                        }
+                        if name == "mortgage" {
+                            next_balance += *deduction_amount;
+                        }
+                    }
+                }
+                Transaction::Salary { amount, day } => {
+                    if name == "main" && next_date.day() == *day {
+                        next_balance += *amount;
+                    }
                 }
             }
-        }
-
-        if next_date.day() == config.mortgage.deduction_day {
-            if name == "main" {
-                next_balance -= config.mortgage.deduction_amount;
-            }
-            if name == "mortgage" {
-                next_balance += config.mortgage.deduction_amount;
-            }            
         }
 
         new_balances.insert(
@@ -102,7 +104,6 @@ fn compute_next_day_balances(
 
     new_balances
 }
-
 
 fn print_balance_named(name: &str, position: &Position, currency_symbol: &str) {
     println!(
@@ -160,22 +161,31 @@ mod tests {
             },
         );
         Config {
-            mortgage: Mortgage {
-                deduction_amount: dec!(123.45),
-                deduction_day: mortgage_deduction_day
-            },
+            transactions: vec![
+                Transaction::Mortgage {
+                    deduction_amount: dec!(123.45),
+                    deduction_day: mortgage_deduction_day
+                },
+                Transaction::Salary {
+                    amount: dec!(2000.00),
+                    day: 6
+                },
+            ],
             accounts,
             currency_symbol: "£".to_string(),
-            salary: None,
         }
     }
 
     #[test]
     fn test_config_parsing() {
         let yaml = r#"
-mortgage:
-  deduction_amount: 123.45
-  deduction_day: 1
+transactions:
+  - type: mortgage
+    deduction_amount: 123.45
+    deduction_day: 1
+  - type: salary
+    amount: 2000.00
+    day: 6
 accounts:
   main:
     position:
@@ -200,9 +210,9 @@ currency_symbol: "£"
     fn test_compute_next_day_balances_no_deduction() {
         let config = make_config(2);
         let mut balances = make_balances();
-        balances.get_mut("main").unwrap().date = "2025-01-05".to_string();
+        balances.get_mut("main").unwrap().date = "2025-01-04".to_string();
         let next = compute_next_day_balances(&config, &balances);
-        assert_eq!(next["main"].date, "2025-01-06");
+        assert_eq!(next["main"].date, "2025-01-05");
         assert_eq!(next["main"].balance, dec!(10000.00));
     }
 
@@ -218,11 +228,7 @@ currency_symbol: "£"
 
     #[test]
     fn test_compute_next_day_balances_with_salary() {
-        let mut config = make_config(5);
-        config.salary = Some(Salary {
-            amount: dec!(2000.00),
-            day: 6,
-        });
+        let config = make_config(5);
         let mut balances = make_balances();
         balances.get_mut("main").unwrap().date = "2025-01-05".to_string();
         let next = compute_next_day_balances(&config, &balances);
@@ -233,7 +239,7 @@ currency_symbol: "£"
     #[test]
     fn test_compute_next_day_balances_with_salary_and_mortgage_same_day() {
         let mut config = make_config(7);
-        config.salary = Some(Salary {
+        config.transactions.push(Transaction::Salary {
             amount: dec!(1500.00),
             day: 7,
         });
@@ -248,7 +254,7 @@ currency_symbol: "£"
     #[test]
     fn test_compute_next_day_balances_with_salary_not_on_salary_day() {
         let mut config = make_config(10);
-        config.salary = Some(Salary {
+        config.transactions.push(Transaction::Salary {
             amount: dec!(1000.00),
             day: 15,
         });
@@ -274,29 +280,26 @@ currency_symbol: "£"
     #[test]
     fn test_config_parsing_with_salary() {
         let yaml = r#"
-mortgage:
-  deduction_amount: 123.45
-  deduction_day: 1
+transactions:
+  - type: mortgage
+    deduction_amount: 123.45
+    deduction_day: 1
+  - type: salary
+    amount: 2500.00
+    day: 28
 accounts:
   main:
     position:
       date: "2025-01-01"
       balance: 10000.00
 currency_symbol: "£"
-salary:
-  amount: 2500.00
-  day: 28
 "#;
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
-        assert_eq!(config.salary, Some(Salary { amount: dec!(2500.00), day: 28 }));
+        assert_eq!(config.transactions.len(), 2);
         assert_eq!(config.currency_symbol, "£");
         let account = config.accounts.get("main").unwrap();
         assert_eq!(account.position.balance, dec!(10000.00));
         assert_eq!(account.position.date, "2025-01-01");
-        assert_eq!(config.mortgage.deduction_day, 1);
-        assert_eq!(config.mortgage.deduction_amount, dec!(123.45));
-        assert_eq!(config.salary.as_ref().unwrap().amount, dec!(2500.00));
-        assert_eq!(config.salary.as_ref().unwrap().day, 28);
     }
 }
 
