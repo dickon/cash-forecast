@@ -8,6 +8,6 @@ transactions:
     day: 26
 accounts:
   main: 10000.00
-  mortgage: 500000.00
+  mortgage: -500000.00
 currency_symbol: "£"
 

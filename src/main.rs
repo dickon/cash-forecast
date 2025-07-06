@@ -41,15 +41,15 @@ fn main() {
     let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
     let config: Config = serde_yaml::from_str(&yaml).expect("Failed to parse YAML");
 
+    // Yes this can be written as a fold, and Copilot can do that, but this mutable is more traditional and maintainable
     let mut date = config.start_date;
-
-    // Create a map of balances for each account as Decimal
     let mut balances: std::collections::HashMap<String, Decimal> = config.accounts.clone();
 
     for _ in 0..600 {
         date = date + chrono::Duration::days(1);
         balances = compute_next_day_balances(&config, &balances, date);
-        // Trigger on last day of month
+
+        // Print a position on last day of month
         if date.month() != (date + chrono::Duration::days(1)).month() {
             for (name, balance) in balances.iter() {
                 print_balance_named(name, date, *balance, &config.currency_symbol);
