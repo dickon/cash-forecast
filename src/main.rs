@@ -33,7 +33,7 @@ struct CurrentAccount {
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 struct Position {
-    date: String,
+    date: chrono::NaiveDate,
     balance: Decimal,
 }
 
@@ -68,8 +68,7 @@ fn compute_next_day_balances(
     let mut new_balances = balances.clone();
 
     for (name, position) in balances {
-        let current_date = chrono::NaiveDate::parse_from_str(&position.date, "%Y-%m-%d")
-            .expect("Invalid date in position");
+        let current_date = position.date;
         let next_date = current_date + chrono::Duration::days(1);
         let mut next_balance = position.balance;
 
@@ -96,7 +95,7 @@ fn compute_next_day_balances(
         new_balances.insert(
             name.clone(),
             Position {
-                date: next_date.format("%Y-%m-%d").to_string(),
+                date: next_date,
                 balance: next_balance,
             },
         );
@@ -109,7 +108,7 @@ fn print_balance_named(name: &str, position: &Position, currency_symbol: &str) {
     println!(
         "{name}: {date} {symbol}{v:.2}",
         name = name,
-        date = position.date,
+        date = position.date.format("%Y-%m-%d"),
         symbol = currency_symbol,
         v = position.balance
     );
@@ -126,14 +125,14 @@ mod tests {
         balances.insert(
             "main".to_string(),
             Position {
-                date: "2025-01-01".to_string(),
+                date: chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
                 balance: dec!(10000.00),
             },
         );
         balances.insert(
             "mortgage".to_string(),
             Position {
-                date: "2025-01-01".to_string(),
+                date: chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
                 balance: dec!(500000.00),
             },
         );
@@ -146,7 +145,7 @@ mod tests {
             "main".to_string(),
             CurrentAccount {
                 position: Position {
-                    date: "2025-01-01".to_string(),
+                    date: chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
                     balance: dec!(10000.00),
                 },
             },
@@ -155,7 +154,7 @@ mod tests {
             "mortgage".to_string(),
             CurrentAccount {
                 position: Position {
-                    date: "2025-01-01".to_string(),
+                    date: chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
                     balance: dec!(500000.00),
                 },
             },
@@ -201,7 +200,7 @@ currency_symbol: "£"
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
         assert_eq!(config, make_config(1));
         let account = config.accounts.get("main").unwrap();
-        assert_eq!(account.position.date, "2025-01-01");
+        assert_eq!(account.position.date, chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap());
         assert_eq!(account.position.balance, dec!(10000.00));
         assert_eq!(config.currency_symbol, "£");
     }
@@ -210,9 +209,9 @@ currency_symbol: "£"
     fn test_compute_next_day_balances_no_deduction() {
         let config = make_config(2);
         let mut balances = make_balances();
-        balances.get_mut("main").unwrap().date = "2025-01-04".to_string();
+        balances.get_mut("main").unwrap().date = chrono::NaiveDate::from_ymd_opt(2025, 1, 4).unwrap();
         let next = compute_next_day_balances(&config, &balances);
-        assert_eq!(next["main"].date, "2025-01-05");
+        assert_eq!(next["main"].date, chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap());
         assert_eq!(next["main"].balance, dec!(10000.00));
     }
 
@@ -220,9 +219,9 @@ currency_symbol: "£"
     fn test_compute_next_day_balances_with_deduction() {
         let config = make_config(3);
         let mut balances = make_balances();
-        balances.get_mut("main").unwrap().date = "2025-01-02".to_string();
+        balances.get_mut("main").unwrap().date = chrono::NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
         let next = compute_next_day_balances(&config, &balances);
-        assert_eq!(next["main"].date, "2025-01-03");
+        assert_eq!(next["main"].date, chrono::NaiveDate::from_ymd_opt(2025, 1, 3).unwrap());
         assert_eq!(next["main"].balance, dec!(10000.00) - dec!(123.45));
     }
 
@@ -230,9 +229,9 @@ currency_symbol: "£"
     fn test_compute_next_day_balances_with_salary() {
         let config = make_config(5);
         let mut balances = make_balances();
-        balances.get_mut("main").unwrap().date = "2025-01-05".to_string();
+        balances.get_mut("main").unwrap().date = chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap();
         let next = compute_next_day_balances(&config, &balances);
-        assert_eq!(next["main"].date, "2025-01-06");
+        assert_eq!(next["main"].date, chrono::NaiveDate::from_ymd_opt(2025, 1, 6).unwrap());
         assert_eq!(next["main"].balance, dec!(10000.00) + dec!(2000.00));
     }
 
@@ -244,10 +243,10 @@ currency_symbol: "£"
             day: 7,
         });
         let mut balances = make_balances();
-        balances.get_mut("main").unwrap().date = "2025-01-06".to_string();
+        balances.get_mut("main").unwrap().date = chrono::NaiveDate::from_ymd_opt(2025, 1, 6).unwrap();
         balances.get_mut("main").unwrap().balance = dec!(5000.00);
         let next = compute_next_day_balances(&config, &balances);
-        assert_eq!(next["main"].date, "2025-01-07");
+        assert_eq!(next["main"].date, chrono::NaiveDate::from_ymd_opt(2025, 1, 7).unwrap());
         assert_eq!(next["main"].balance, dec!(5000.00) + dec!(1500.00) - dec!(123.45));
     }
 
@@ -259,10 +258,10 @@ currency_symbol: "£"
             day: 15,
         });
         let mut balances = make_balances();
-        balances.get_mut("main").unwrap().date = "2025-01-14".to_string();
+        balances.get_mut("main").unwrap().date = chrono::NaiveDate::from_ymd_opt(2025, 1, 14).unwrap();
         balances.get_mut("main").unwrap().balance = dec!(8000.00);
         let next = compute_next_day_balances(&config, &balances);
-        assert_eq!(next["main"].date, "2025-01-15");
+        assert_eq!(next["main"].date, chrono::NaiveDate::from_ymd_opt(2025, 1, 15).unwrap());
         assert_eq!(next["main"].balance, dec!(8000.00) + dec!(1000.00));
     }
 
@@ -270,10 +269,10 @@ currency_symbol: "£"
     fn test_compute_next_day_balances_with_salary_none() {
         let config = make_config(20);
         let mut balances = make_balances();
-        balances.get_mut("main").unwrap().date = "2025-01-19".to_string();
+        balances.get_mut("main").unwrap().date = chrono::NaiveDate::from_ymd_opt(2025, 1, 19).unwrap();
         balances.get_mut("main").unwrap().balance = dec!(9000.00);
         let next = compute_next_day_balances(&config, &balances);
-        assert_eq!(next["main"].date, "2025-01-20");
+        assert_eq!(next["main"].date, chrono::NaiveDate::from_ymd_opt(2025, 1, 20).unwrap());
         assert_eq!(next["main"].balance, dec!(9000.00) - dec!(123.45));
     }
 
@@ -299,7 +298,7 @@ currency_symbol: "£"
         assert_eq!(config.currency_symbol, "£");
         let account = config.accounts.get("main").unwrap();
         assert_eq!(account.position.balance, dec!(10000.00));
-        assert_eq!(account.position.date, "2025-01-01");
+        assert_eq!(account.position.date, chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap());
     }
 }
 
