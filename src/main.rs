@@ -26,7 +26,7 @@ struct CurrentAccount {
     position: Position,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Clone)]
 struct Position {
     date: String,
     balance: Decimal,
@@ -47,31 +47,28 @@ fn main() {
     let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
     let config: Config = serde_yaml::from_str(&yaml).expect("Failed to parse YAML");
 
-    // Create a map of balances for each account
-    let mut balances: std::collections::HashMap<String, (chrono::NaiveDate, Decimal)> = config
+    // Create a map of balances for each account as Position
+    let mut balances: std::collections::HashMap<String, Position> = config
         .accounts
         .iter()
-        .map(|(name, account)| {
-            let date = chrono::NaiveDate::parse_from_str(&account.position.date, "%Y-%m-%d")
-                .expect("Invalid date in config");
-            (name.clone(), (date, account.position.balance))
-        })
+        .map(|(name, account)| (name.clone(), account.position.clone()))
         .collect();
 
     for _ in 0..60 {
-        for (name, balance) in balances.iter_mut() {
-            *balance = compute_next_day_balance(&config, *balance);
-            print_balance_named(name, *balance, &config.currency_symbol);
+        for (name, position) in balances.iter_mut() {
+            *position = compute_next_day_balance(&config, position);
+            print_balance_named(name, position, &config.currency_symbol);
         }
     }
 }
 
-fn compute_next_day_balance(config: &Config, balance: (chrono::NaiveDate, Decimal)) -> (chrono::NaiveDate, Decimal) {
-    let next_date = balance.0 + chrono::Duration::days(1);
-    let mut next_balance = balance.1;
+fn compute_next_day_balance(config: &Config, position: &Position) -> Position {
+    let current_date = chrono::NaiveDate::parse_from_str(&position.date, "%Y-%m-%d")
+        .expect("Invalid date in position");
+    let next_date = current_date + chrono::Duration::days(1);
+    let mut next_balance = position.balance;
 
     if let Some(salary) = &config.salary {
-        let salary = salary;
         if next_date.day() == salary.day {
             next_balance += salary.amount;
         }
@@ -79,7 +76,11 @@ fn compute_next_day_balance(config: &Config, balance: (chrono::NaiveDate, Decima
     if next_date.day() == config.mortgage.deduction_day {
         next_balance -= config.mortgage.deduction_amount;
     }
-    (next_date, next_balance)
+
+    Position {
+        date: next_date.format("%Y-%m-%d").to_string(),
+        balance: next_balance,
+    }
 }
 
 fn print_balance(balance: (chrono::NaiveDate, Decimal), currency_symbol: &str) {
@@ -88,14 +89,13 @@ fn print_balance(balance: (chrono::NaiveDate, Decimal), currency_symbol: &str) {
     println!("{date} {symbol}{v:.2}", date = date, symbol = currency_symbol, v = balance.1);
 }
 
-fn print_balance_named(name: &str, balance: (chrono::NaiveDate, Decimal), currency_symbol: &str) {
-    let date = balance.0;
+fn print_balance_named(name: &str, position: &Position, currency_symbol: &str) {
     println!(
         "{name}: {date} {symbol}{v:.2}",
         name = name,
-        date = date,
+        date = position.date,
         symbol = currency_symbol,
-        v = balance.1
+        v = position.balance
     );
 }
 
@@ -166,25 +166,25 @@ currency_symbol: "£"
     #[test]
     fn test_compute_next_day_balance_no_deduction() {
         let config = make_config(2);
-        let balance = (
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
-            dec!(10000.00),
-        );
-        let balance = compute_next_day_balance(&config, balance);
-        assert_eq!(balance.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 6).unwrap());
-        assert_eq!(balance.1, dec!(10000.00));
+        let position = Position {
+            date: "2025-01-05".to_string(),
+            balance: dec!(10000.00),
+        };
+        let next = compute_next_day_balance(&config, &position);
+        assert_eq!(next.date, "2025-01-06");
+        assert_eq!(next.balance, dec!(10000.00));
     }
 
     #[test]
     fn test_compute_next_day_balance_with_deduction() {
         let config = make_config(3);
-        let balance = (
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
-            dec!(10000.00),
-        );
-        let balance = compute_next_day_balance(&config, balance);
-        assert_eq!(balance.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 3).unwrap());
-        assert_eq!(balance.1, dec!(10000.00) - dec!(123.45));
+        let position = Position {
+            date: "2025-01-02".to_string(),
+            balance: dec!(10000.00),
+        };
+        let next = compute_next_day_balance(&config, &position);
+        assert_eq!(next.date, "2025-01-03");
+        assert_eq!(next.balance, dec!(10000.00) - dec!(123.45));
     }
 
     #[test]
@@ -194,13 +194,13 @@ currency_symbol: "£"
             amount: dec!(2000.00),
             day: 6,
         });
-        let balance = (
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
-            dec!(10000.00),
-        );
-        let balance = compute_next_day_balance(&config, balance);
-        assert_eq!(balance.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 6).unwrap());
-        assert_eq!(balance.1, dec!(10000.00) + dec!(2000.00));
+        let position = Position {
+            date: "2025-01-05".to_string(),
+            balance: dec!(10000.00),
+        };
+        let next = compute_next_day_balance(&config, &position);
+        assert_eq!(next.date, "2025-01-06");
+        assert_eq!(next.balance, dec!(10000.00) + dec!(2000.00));
     }
 
     #[test]
@@ -210,14 +210,14 @@ currency_symbol: "£"
             amount: dec!(1500.00),
             day: 7,
         });
-        let balance = (
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 6).unwrap(),
-            dec!(5000.00),
-        );
-        let balance = compute_next_day_balance(&config, balance);
-        assert_eq!(balance.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 7).unwrap());
+        let position = Position {
+            date: "2025-01-06".to_string(),
+            balance: dec!(5000.00),
+        };
+        let next = compute_next_day_balance(&config, &position);
+        assert_eq!(next.date, "2025-01-07");
         // Salary is added, mortgage is deducted
-        assert_eq!(balance.1, dec!(5000.00) + dec!(1500.00) - dec!(123.45));
+        assert_eq!(next.balance, dec!(5000.00) + dec!(1500.00) - dec!(123.45));
     }
 
     #[test]
@@ -227,27 +227,27 @@ currency_symbol: "£"
             amount: dec!(1000.00),
             day: 15,
         });
-        let balance = (
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 14).unwrap(),
-            dec!(8000.00),
-        );
-        let balance = compute_next_day_balance(&config, balance);
-        assert_eq!(balance.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 15).unwrap());
+        let position = Position {
+            date: "2025-01-14".to_string(),
+            balance: dec!(8000.00),
+        };
+        let next = compute_next_day_balance(&config, &position);
+        assert_eq!(next.date, "2025-01-15");
         // Salary is added on the 15th
-        assert_eq!(balance.1, dec!(8000.00) + dec!(1000.00));
+        assert_eq!(next.balance, dec!(8000.00) + dec!(1000.00));
     }
 
     #[test]
     fn test_compute_next_day_balance_with_salary_none() {
         let config = make_config(20);
-        let balance = (
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 19).unwrap(),
-            dec!(9000.00),
-        );
-        let balance = compute_next_day_balance(&config, balance);
-        assert_eq!(balance.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 20).unwrap());
+        let position = Position {
+            date: "2025-01-19".to_string(),
+            balance: dec!(9000.00),
+        };
+        let next = compute_next_day_balance(&config, &position);
+        assert_eq!(next.date, "2025-01-20");
         // Only mortgage deduction applies
-        assert_eq!(balance.1, dec!(9000.00) - dec!(123.45));
+        assert_eq!(next.balance, dec!(9000.00) - dec!(123.45));
     }
 
     #[test]
@@ -267,9 +267,15 @@ salary:
   day: 28
 "#;
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
-        assert_eq!(config.salary, Some(Salary { amount: dec!(2500.00), day: 28 }));        assert_eq!(config.currency_symbol, "£");        let account = config.accounts.get("main").unwrap();        assert_eq!(account.position.balance, dec!(10000.00));        assert_eq!(account.position.date, "2025-01-01");        assert_eq!(config.mortgage.deduction_day, 1);        assert_eq!(config.mortgage.deduction_amount, dec!(123.45));        assert_eq!(config.salary.as_ref().unwrap().amount, dec!(2500.00));
+        assert_eq!(config.salary, Some(Salary { amount: dec!(2500.00), day: 28 }));
+        assert_eq!(config.currency_symbol, "£");
+        let account = config.accounts.get("main").unwrap();
+        assert_eq!(account.position.balance, dec!(10000.00));
+        assert_eq!(account.position.date, "2025-01-01");
+        assert_eq!(config.mortgage.deduction_day, 1);
+        assert_eq!(config.mortgage.deduction_amount, dec!(123.45));
+        assert_eq!(config.salary.as_ref().unwrap().amount, dec!(2500.00));
         assert_eq!(config.salary.as_ref().unwrap().day, 28);
-    }    
-
+    }
 }
 
