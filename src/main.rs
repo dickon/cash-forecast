@@ -55,32 +55,48 @@ fn main() {
         .collect();
 
     for _ in 0..60 {
-        for (name, position) in balances.iter_mut() {
-            *position = compute_next_day_balance(&config, position);
+        balances = compute_next_day_balances(&config, &balances);
+        for (name, position) in balances.iter() {
             print_balance_named(name, position, &config.currency_symbol);
         }
     }
 }
 
-fn compute_next_day_balance(config: &Config, position: &Position) -> Position {
-    let current_date = chrono::NaiveDate::parse_from_str(&position.date, "%Y-%m-%d")
-        .expect("Invalid date in position");
-    let next_date = current_date + chrono::Duration::days(1);
-    let mut next_balance = position.balance;
 
-    if let Some(salary) = &config.salary {
-        if next_date.day() == salary.day {
-            next_balance += salary.amount;
+
+fn compute_next_day_balances(
+    config: &Config,
+    balances: &std::collections::HashMap<String, Position>,
+) -> std::collections::HashMap<String, Position> {
+    let mut new_balances = balances.clone();
+
+    for (name, position) in balances {
+        let current_date = chrono::NaiveDate::parse_from_str(&position.date, "%Y-%m-%d")
+            .expect("Invalid date in position");
+        let next_date = current_date + chrono::Duration::days(1);
+        let mut next_balance = position.balance;
+
+        if name == "main" {
+            if let Some(salary) = &config.salary {
+                if next_date.day() == salary.day {
+                    next_balance += salary.amount;
+                }
+            }
+            if next_date.day() == config.mortgage.deduction_day {
+                next_balance -= config.mortgage.deduction_amount;
+            }
         }
-    }
-    if next_date.day() == config.mortgage.deduction_day {
-        next_balance -= config.mortgage.deduction_amount;
+
+        new_balances.insert(
+            name.clone(),
+            Position {
+                date: next_date.format("%Y-%m-%d").to_string(),
+                balance: next_balance,
+            },
+        );
     }
 
-    Position {
-        date: next_date.format("%Y-%m-%d").to_string(),
-        balance: next_balance,
-    }
+    new_balances
 }
 
 fn print_balance(balance: (chrono::NaiveDate, Decimal), currency_symbol: &str) {
@@ -104,6 +120,25 @@ mod tests {
     use super::*;
     use rust_decimal_macros::dec;
     use std::collections::HashMap;
+
+    fn make_balances() -> HashMap<String, Position> {
+        let mut balances = HashMap::new();
+        balances.insert(
+            "main".to_string(),
+            Position {
+                date: "2025-01-01".to_string(),
+                balance: dec!(10000.00),
+            },
+        );
+        balances.insert(
+            "mortgage".to_string(),
+            Position {
+                date: "2025-01-01".to_string(),
+                balance: dec!(500000.00),
+            },
+        );
+        balances
+    }
 
     fn make_config(mortgage_deduction_day: u32) -> Config {
         let mut accounts = HashMap::new();
@@ -129,7 +164,7 @@ mod tests {
             mortgage: Mortgage {
                 deduction_amount: dec!(123.45),
                 deduction_day: mortgage_deduction_day,
-                position: None
+                position: None,
             },
             accounts,
             currency_symbol: "£".to_string(),
@@ -164,90 +199,78 @@ currency_symbol: "£"
     }
 
     #[test]
-    fn test_compute_next_day_balance_no_deduction() {
+    fn test_compute_next_day_balances_no_deduction() {
         let config = make_config(2);
-        let position = Position {
-            date: "2025-01-05".to_string(),
-            balance: dec!(10000.00),
-        };
-        let next = compute_next_day_balance(&config, &position);
-        assert_eq!(next.date, "2025-01-06");
-        assert_eq!(next.balance, dec!(10000.00));
+        let mut balances = make_balances();
+        balances.get_mut("main").unwrap().date = "2025-01-05".to_string();
+        let next = compute_next_day_balances(&config, &balances);
+        assert_eq!(next["main"].date, "2025-01-06");
+        assert_eq!(next["main"].balance, dec!(10000.00));
     }
 
     #[test]
-    fn test_compute_next_day_balance_with_deduction() {
+    fn test_compute_next_day_balances_with_deduction() {
         let config = make_config(3);
-        let position = Position {
-            date: "2025-01-02".to_string(),
-            balance: dec!(10000.00),
-        };
-        let next = compute_next_day_balance(&config, &position);
-        assert_eq!(next.date, "2025-01-03");
-        assert_eq!(next.balance, dec!(10000.00) - dec!(123.45));
+        let mut balances = make_balances();
+        balances.get_mut("main").unwrap().date = "2025-01-02".to_string();
+        let next = compute_next_day_balances(&config, &balances);
+        assert_eq!(next["main"].date, "2025-01-03");
+        assert_eq!(next["main"].balance, dec!(10000.00) - dec!(123.45));
     }
 
     #[test]
-    fn test_compute_next_day_balance_with_salary() {
+    fn test_compute_next_day_balances_with_salary() {
         let mut config = make_config(5);
         config.salary = Some(Salary {
             amount: dec!(2000.00),
             day: 6,
         });
-        let position = Position {
-            date: "2025-01-05".to_string(),
-            balance: dec!(10000.00),
-        };
-        let next = compute_next_day_balance(&config, &position);
-        assert_eq!(next.date, "2025-01-06");
-        assert_eq!(next.balance, dec!(10000.00) + dec!(2000.00));
+        let mut balances = make_balances();
+        balances.get_mut("main").unwrap().date = "2025-01-05".to_string();
+        let next = compute_next_day_balances(&config, &balances);
+        assert_eq!(next["main"].date, "2025-01-06");
+        assert_eq!(next["main"].balance, dec!(10000.00) + dec!(2000.00));
     }
 
     #[test]
-    fn test_compute_next_day_balance_with_salary_and_mortgage_same_day() {
+    fn test_compute_next_day_balances_with_salary_and_mortgage_same_day() {
         let mut config = make_config(7);
         config.salary = Some(Salary {
             amount: dec!(1500.00),
             day: 7,
         });
-        let position = Position {
-            date: "2025-01-06".to_string(),
-            balance: dec!(5000.00),
-        };
-        let next = compute_next_day_balance(&config, &position);
-        assert_eq!(next.date, "2025-01-07");
-        // Salary is added, mortgage is deducted
-        assert_eq!(next.balance, dec!(5000.00) + dec!(1500.00) - dec!(123.45));
+        let mut balances = make_balances();
+        balances.get_mut("main").unwrap().date = "2025-01-06".to_string();
+        balances.get_mut("main").unwrap().balance = dec!(5000.00);
+        let next = compute_next_day_balances(&config, &balances);
+        assert_eq!(next["main"].date, "2025-01-07");
+        assert_eq!(next["main"].balance, dec!(5000.00) + dec!(1500.00) - dec!(123.45));
     }
 
     #[test]
-    fn test_compute_next_day_balance_with_salary_not_on_salary_day() {
+    fn test_compute_next_day_balances_with_salary_not_on_salary_day() {
         let mut config = make_config(10);
         config.salary = Some(Salary {
             amount: dec!(1000.00),
             day: 15,
         });
-        let position = Position {
-            date: "2025-01-14".to_string(),
-            balance: dec!(8000.00),
-        };
-        let next = compute_next_day_balance(&config, &position);
-        assert_eq!(next.date, "2025-01-15");
-        // Salary is added on the 15th
-        assert_eq!(next.balance, dec!(8000.00) + dec!(1000.00));
+        let mut balances = make_balances();
+        balances.get_mut("main").unwrap().date = "2025-01-14".to_string();
+        balances.get_mut("main").unwrap().balance = dec!(8000.00);
+        let next = compute_next_day_balances(&config, &balances);
+        assert_eq!(next["main"].date, "2025-01-15");
+        assert_eq!(next["main"].balance, dec!(8000.00) + dec!(1000.00));
     }
 
     #[test]
-    fn test_compute_next_day_balance_with_salary_none() {
+    fn test_compute_next_day_balances_with_salary_none() {
         let config = make_config(20);
-        let position = Position {
-            date: "2025-01-19".to_string(),
-            balance: dec!(9000.00),
-        };
-        let next = compute_next_day_balance(&config, &position);
-        assert_eq!(next.date, "2025-01-20");
-        // Only mortgage deduction applies
-        assert_eq!(next.balance, dec!(9000.00) - dec!(123.45));
+        let mut balances = make_balances();
+        balances.get_mut("main").unwrap().date = "2025-01-19".to_string();
+        balances.get_mut("main").unwrap().balance = dec!(9000.00);
+        let next = compute_next_day_balances(&config, &balances);
+        assert_eq!(next["main"].date, "2025-01-20");
+        assert_eq!(next["main"].balance, dec!(9000.00) - dec!(123.45));
     }
 
     #[test]
