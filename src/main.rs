@@ -116,6 +116,15 @@ mod tests {
                 },
             },
         );
+        accounts.insert(
+            "mortgage".to_string(),
+            CurrentAccount {
+                position: Position {
+                    date: "2025-01-01".to_string(),
+                    balance: dec!(500000.00),
+                },
+            },
+        );
         Config {
             mortgage: Mortgage {
                 deduction_amount: dec!(123.45),
@@ -139,6 +148,11 @@ accounts:
     position:
       date: "2025-01-01"
       balance: 10000.00
+  mortgage:
+    position:
+      date: "2025-01-01"
+      balance: 500000.00
+
 currency_symbol: "£"
 "#;
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
