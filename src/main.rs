@@ -29,11 +29,6 @@ enum Transaction {
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct CurrentAccount {
-    position: Position,
-}
-
-#[derive(Debug, Deserialize, PartialEq, Clone)]
-struct Position {
     balance: Decimal,
 }
 
@@ -52,7 +47,7 @@ fn main() {
     let mut balances: std::collections::HashMap<String, Decimal> = config
         .accounts
         .iter()
-        .map(|(name, account)| (name.clone(), account.position.balance))
+        .map(|(name, account)| (name.clone(), account.balance))
         .collect();
 
     for _ in 0..60 {
@@ -128,17 +123,13 @@ mod tests {
         accounts.insert(
             "main".to_string(),
             CurrentAccount {
-                position: Position {
-                    balance: dec!(10000.00),
-                },
+                balance: dec!(10000.00),
             },
         );
         accounts.insert(
             "mortgage".to_string(),
             CurrentAccount {
-                position: Position {
-                    balance: dec!(500000.00),
-                },
+                balance: dec!(500000.00),
             },
         );
         Config {
@@ -170,11 +161,9 @@ transactions:
     day: 6
 accounts:
   main:
-    position:
-      balance: 10000.00
+    balance: 10000.00
   mortgage:
-    position:
-      balance: 500000.00
+    balance: 500000.00
 
 currency_symbol: "£"
 start_date: "2025-01-01"
@@ -182,7 +171,7 @@ start_date: "2025-01-01"
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
         assert_eq!(config, make_config(1));
         let account = config.accounts.get("main").unwrap();
-        assert_eq!(account.position.balance, dec!(10000.00));
+        assert_eq!(account.balance, dec!(10000.00));
         assert_eq!(config.currency_symbol, "£");
     }
 
@@ -281,8 +270,7 @@ transactions:
     day: 28
 accounts:
   main:
-    position:
-      balance: 10000.00
+    balance: 10000.00
 currency_symbol: "£"
 start_date: "2025-01-01"
 "#;
@@ -290,7 +278,7 @@ start_date: "2025-01-01"
         assert_eq!(config.transactions.len(), 2);
         assert_eq!(config.currency_symbol, "£");
         let account = config.accounts.get("main").unwrap();
-        assert_eq!(account.position.balance, dec!(10000.00));
+        assert_eq!(account.balance, dec!(10000.00));
     }
 }
 
