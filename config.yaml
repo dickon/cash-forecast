@@ -1,11 +1,13 @@
 mortgage:
   deduction_amount: 123.45
   deduction_day: 1
-  balance: 50000.00
-salary:
-  amount: 2000.00
-  day: 15
 current_account:
-  position:
-    date: 2025-01-01
-    balance: 10000.00
+  main:
+    position:
+      date: "2025-01-01"
+      balance: 10000.00
+currency_symbol: "£"
+salary:
+  amount: 2500.00
+  day: 26
+
