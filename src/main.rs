@@ -16,9 +16,7 @@ struct Config {
 #[derive(Debug, Deserialize, PartialEq)]
 struct Mortgage {
     deduction_amount: Decimal,
-    deduction_day: u32,
-    #[serde(default)]
-    position: Option<Position>
+    deduction_day: u32
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -82,9 +80,15 @@ fn compute_next_day_balances(
                     next_balance += salary.amount;
                 }
             }
-            if next_date.day() == config.mortgage.deduction_day {
+        }
+
+        if next_date.day() == config.mortgage.deduction_day {
+            if name == "main" {
                 next_balance -= config.mortgage.deduction_amount;
             }
+            if name == "mortgage" {
+                next_balance += config.mortgage.deduction_amount;
+            }            
         }
 
         new_balances.insert(
@@ -163,8 +167,7 @@ mod tests {
         Config {
             mortgage: Mortgage {
                 deduction_amount: dec!(123.45),
-                deduction_day: mortgage_deduction_day,
-                position: None,
+                deduction_day: mortgage_deduction_day
             },
             accounts,
             currency_symbol: "£".to_string(),

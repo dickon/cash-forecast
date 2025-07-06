@@ -9,7 +9,7 @@ accounts:
   mortgage:
     position:
       date: "2025-01-01"
-      balance: 500000.00
+      balance: -500000.00
 currency_symbol: "£"
 salary:
   amount: 2500.00
