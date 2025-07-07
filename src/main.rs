@@ -195,8 +195,6 @@ transactions:
   - type: mortgage
     deduction_amount: 123.45
     deduction_day: 1
-    from: main
-    to: mortgage
   - type: salary
     amount: 2000.00
     day: 6
