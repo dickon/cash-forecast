@@ -148,13 +148,12 @@ mod tests {
     use rust_decimal_macros::dec;
     use std::collections::HashMap;
 
-    fn make_balances() -> HashMap<String, Decimal> {
+    fn create_test_balances() -> HashMap<String, Decimal> {
         let balances = HashMap::from([
             ("main".to_string(), dec!(10000.00)),
             ("mortgage".to_string(), dec!(500000.00)),
         ]);
         let balances = super::add_default_accounts(&balances);
-        let mut balances = balances;
         add_opening_balances(&balances)
     }
 
@@ -219,7 +218,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_no_deduction() {
         let config = make_config(2);
-        let balances = make_balances();
+        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
             &balances,
@@ -231,7 +230,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_with_deduction() {
         let config = make_config(3);
-        let balances = make_balances();
+        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
             &balances,
@@ -243,7 +242,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_with_salary() {
         let config = make_config(5);
-        let balances = make_balances();
+        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
             &balances,
@@ -259,7 +258,7 @@ start_date: "2025-01-01"
             amount: dec!(1500.00),
             day: 7,
         });
-        let balances = make_balances();
+        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
             &balances,
@@ -275,7 +274,7 @@ start_date: "2025-01-01"
             amount: dec!(1000.00),
             day: 15,
         });
-        let balances = make_balances();
+        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
             &balances,
@@ -287,7 +286,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_with_salary_none() {
         let config = make_config(20);
-        let balances = make_balances();
+        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
             &balances,
