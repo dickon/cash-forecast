@@ -75,10 +75,11 @@ fn main() {
 
 fn run(
     config: Config,
-    mut balances: std::collections::HashMap<String, Decimal>,
+    balances: std::collections::HashMap<String, Decimal>,
     days_to_run: i32,
     show_monthly_positions: bool,
 ) -> std::collections::HashMap<String, Decimal> {
+    let mut balances = balances;
     let mut date: chrono::NaiveDate = config.start_date;
     for _ in 0..days_to_run {
         date = date + chrono::Duration::days(1);
