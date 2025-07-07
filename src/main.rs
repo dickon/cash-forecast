@@ -24,14 +24,16 @@ enum Transaction {
     Mortgage {
         deduction_amount: Decimal,
         deduction_day: u32,
+        #[serde(default = "default_main")]
         from: String,
+        #[serde(default = "default_mortgage")]
         to: String,
     },
     #[serde(rename = "salary")]
     Salary {
         amount: Decimal,
         day: u32,
-        #[serde(default = "default_salary_to")]
+        #[serde(default = "default_main")]
         to: String,
     },
 }
@@ -44,8 +46,12 @@ fn default_start_date() -> chrono::NaiveDate {
     chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()
 }
 
-fn default_salary_to() -> String {
+fn default_main() -> String {
     MAIN_ACCOUNT.to_string()
+}
+
+fn default_mortgage() -> String {
+    "mortgage".to_string()
 }
 
 fn main() {
