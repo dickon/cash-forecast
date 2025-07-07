@@ -7,6 +7,7 @@ const MAIN_ACCOUNT: &str = "main";
 const SALARY_INCOME: &str = "salary_income";
 const MORTGAGE_INCOME: &str = "mortgage_income";
 const MORTGAGE_ACCOUNT: &str = "mortgage";
+const OPENING_BALANCES: &str = "opening_balances";
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
@@ -102,7 +103,7 @@ fn add_opening_balances(
 ) -> std::collections::HashMap<String, Decimal> {
     let mut new_balances = balances.clone();
     let opening_balance: Decimal = new_balances.values().sum();
-    new_balances.insert("opening_balances".to_string(), -opening_balance);
+    new_balances.insert(OPENING_BALANCES.to_string(), -opening_balance);
     new_balances
 }
 
