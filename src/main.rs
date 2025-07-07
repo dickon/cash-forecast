@@ -321,5 +321,19 @@ start_date: "2025-01-01"
         let account = config.accounts.get(MAIN_ACCOUNT).unwrap();
         assert_eq!(*account, dec!(10000.00));
     }
+
+    #[test]
+    fn test_run_balances_consistency() {
+        let config = create_test_accounts(1);
+        println!("Config: {:#?}", config);
+        let balances = config.accounts.clone();
+        let final_balances = super::run(config, balances, 30, false);
+        // The sum of all balances should be zero (by design)
+        println!("Final balances: {:#?}", final_balances);
+        let total: Decimal = final_balances.values().copied().sum();
+        assert_eq!(total, Decimal::ZERO);
+        assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) + dec!(2000.00));
+    }
 }
+
 
