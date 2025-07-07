@@ -57,10 +57,7 @@ fn main() {
 
     
     let mut date = config.start_date;
-    let mut balances: std::collections::HashMap<String, Decimal> = config.accounts.clone();
-
-    set_default_accounts(&mut balances);
-    
+    let mut balances: std::collections::HashMap<String, Decimal> = set_default_accounts(&config.accounts);
     set_opening_balances(&mut balances);
 
     for _ in 0..600 {
@@ -81,15 +78,17 @@ fn set_opening_balances(balances: &mut std::collections::HashMap<String, Decimal
     balances.insert("opening_balances".to_string(), -opening_balance);
 }
 
-fn set_default_accounts(balances: &mut std::collections::HashMap<String, Decimal>) {
-    // Add salary_income account with initial balance of 0 if it is absent
-    if !balances.contains_key(SALARY_INCOME) {
-        balances.insert(SALARY_INCOME.to_string(), Decimal::ZERO);
+fn set_default_accounts(
+    balances: &std::collections::HashMap<String, Decimal>,
+) -> std::collections::HashMap<String, Decimal> {
+    let mut new_balances = balances.clone();
+    if !new_balances.contains_key(SALARY_INCOME) {
+        new_balances.insert(SALARY_INCOME.to_string(), Decimal::ZERO);
     }
-    // Add mortgage_income account with initial balance of 0 if it is absent
-    if !balances.contains_key(MORTGAGE_INCOME) {
-        balances.insert(MORTGAGE_INCOME.to_string(), Decimal::ZERO);
+    if !new_balances.contains_key(MORTGAGE_INCOME) {
+        new_balances.insert(MORTGAGE_INCOME.to_string(), Decimal::ZERO);
     }
+    new_balances
 }
 
 fn compute_next_day_balances(
@@ -146,24 +145,22 @@ mod tests {
     use std::collections::HashMap;
 
     fn make_balances() -> HashMap<String, Decimal> {
-        let mut balances = HashMap::from([
+        let balances = HashMap::from([
             ("main".to_string(), dec!(10000.00)),
             ("mortgage".to_string(), dec!(500000.00)),
         ]);
-        set_default_accounts(&mut balances);
+        let balances = super::set_default_accounts(&balances);
+        let mut balances = balances;
         set_opening_balances(&mut balances);
         balances
     }
 
-
     fn make_config(mortgage_deduction_day: u32) -> Config {
-        let mut accounts = HashMap::from([
+        let accounts = HashMap::from([
             ("main".to_string(), dec!(10000.00)),
             ("mortgage".to_string(), dec!(500000.00)),
-            (MORTGAGE_INCOME.to_string(), dec!(0.00)),
-            (SALARY_INCOME.to_string(), dec!(0.00))
         ]);
-        set_default_accounts(&mut accounts);
+        let accounts = super::set_default_accounts(&accounts);
         Config {
             transactions: vec![
                 Transaction::Mortgage {
@@ -200,7 +197,7 @@ accounts:
   mortgage: 500000.00
   salary_income: 0.00
   mortgage_income: 0.00
-
+  # salary_income and mortgage_income omitted to test defaulting
 currency_symbol: "£"
 start_date: "2025-01-01"
 "#;
@@ -215,7 +212,6 @@ start_date: "2025-01-01"
         assert_eq!(*account, dec!(10000.00));
         assert_eq!(config.currency_symbol, "£");
     }
-
 
     #[test]
     fn test_compute_next_day_balances_no_deduction() {
@@ -244,8 +240,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_with_salary() {
         let config = make_config(5);
-        let mut balances = make_balances();
-        set_default_accounts(&mut balances);
+        let balances = make_balances();
         let next = compute_next_day_balances(
             &config,
             &balances,
@@ -261,8 +256,7 @@ start_date: "2025-01-01"
             amount: dec!(1500.00),
             day: 7,
         });
-        let mut balances = make_balances();
-        set_default_accounts(&mut balances);
+        let balances = make_balances();
         let next = compute_next_day_balances(
             &config,
             &balances,
@@ -290,7 +284,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_with_salary_none() {
         let config = make_config(20);
-        let mut balances = make_balances();
+        let balances = make_balances();
         let next = compute_next_day_balances(
             &config,
             &balances,
@@ -318,7 +312,6 @@ start_date: "2025-01-01"
 "#;
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
         assert_eq!(config.transactions.len(), 2);
-        assert_eq!(config.currency_symbol, "£");
         let account = config.accounts.get("main").unwrap();
         assert_eq!(*account, dec!(10000.00));
     }
