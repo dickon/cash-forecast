@@ -57,8 +57,8 @@ fn main() {
 
     
     let mut date = config.start_date;
-    let mut balances: std::collections::HashMap<String, Decimal> = set_default_accounts(&config.accounts);
-    set_opening_balances(&mut balances);
+    let accounts_with_defaults: std::collections::HashMap<String, Decimal> = add_default_accounts(&config.accounts);
+    let mut balances = add_opening_balances(&accounts_with_defaults);
 
     for _ in 0..600 {
         date = date + chrono::Duration::days(1);
@@ -73,12 +73,16 @@ fn main() {
     }
 }
 
-fn set_opening_balances(balances: &mut std::collections::HashMap<String, Decimal>) {
-    let opening_balance: Decimal = balances.values().sum();
-    balances.insert("opening_balances".to_string(), -opening_balance);
+fn add_opening_balances(
+    balances: &std::collections::HashMap<String, Decimal>,
+) -> std::collections::HashMap<String, Decimal> {
+    let mut new_balances = balances.clone();
+    let opening_balance: Decimal = new_balances.values().sum();
+    new_balances.insert("opening_balances".to_string(), -opening_balance);
+    new_balances
 }
 
-fn set_default_accounts(
+fn add_default_accounts(
     balances: &std::collections::HashMap<String, Decimal>,
 ) -> std::collections::HashMap<String, Decimal> {
     let mut new_balances = balances.clone();
@@ -149,10 +153,9 @@ mod tests {
             ("main".to_string(), dec!(10000.00)),
             ("mortgage".to_string(), dec!(500000.00)),
         ]);
-        let balances = super::set_default_accounts(&balances);
+        let balances = super::add_default_accounts(&balances);
         let mut balances = balances;
-        set_opening_balances(&mut balances);
-        balances
+        add_opening_balances(&balances)
     }
 
     fn make_config(mortgage_deduction_day: u32) -> Config {
@@ -160,7 +163,7 @@ mod tests {
             ("main".to_string(), dec!(10000.00)),
             ("mortgage".to_string(), dec!(500000.00)),
         ]);
-        let accounts = super::set_default_accounts(&accounts);
+        let accounts = super::add_default_accounts(&accounts);
         Config {
             transactions: vec![
                 Transaction::Mortgage {
