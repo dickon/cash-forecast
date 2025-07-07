@@ -58,13 +58,9 @@ fn main() {
     let mut date = config.start_date;
     let mut balances: std::collections::HashMap<String, Decimal> = config.accounts.clone();
 
-    // Add salary_income account with initial balance of 0 if it is absent
-    if !balances.contains_key(SALARY_INCOME) {
-        balances.insert(SALARY_INCOME.to_string(), Decimal::ZERO);
-    }
-
-    let opening_balance: Decimal = balances.values().sum();
-    balances.insert("opening_balances".to_string(), -opening_balance);
+    set_default_accounts(&mut balances);
+    
+    set_opening_balances(&mut balances);
 
     for _ in 0..600 {
         date = date + chrono::Duration::days(1);
@@ -76,6 +72,18 @@ fn main() {
                 print_balance_named(name, date, *balance, &config.currency_symbol);
             }
         }
+    }
+}
+
+fn set_opening_balances(balances: &mut std::collections::HashMap<String, Decimal>) {
+    let opening_balance: Decimal = balances.values().sum();
+    balances.insert("opening_balances".to_string(), -opening_balance);
+}
+
+fn set_default_accounts(balances: &mut std::collections::HashMap<String, Decimal>) {
+    // Add salary_income account with initial balance of 0 if it is absent
+    if !balances.contains_key(SALARY_INCOME) {
+        balances.insert(SALARY_INCOME.to_string(), Decimal::ZERO);
     }
 }
 
@@ -111,9 +119,7 @@ fn compute_next_day_balances(
         for (name, balance) in &new_balances {
             print_balance_named(name, date, *balance, &config.currency_symbol);
         }
-        // print error message and exit
-        eprintln!("Error: Balances do not sum to zero on {date}: {total_balance}");
-        std::process::exit(1);
+        panic!("Error: Balances do not sum to zero on {date}: {total_balance}");
     }
     new_balances
 }
@@ -135,17 +141,23 @@ mod tests {
     use std::collections::HashMap;
 
     fn make_balances() -> HashMap<String, Decimal> {
-        HashMap::from([
-            ("main".to_string(), dec!(10000.00)),
-            ("mortgage".to_string(), dec!(500000.00)),
-        ])
-    }
-
-    fn make_config(mortgage_deduction_day: u32) -> Config {
-        let accounts = HashMap::from([
+        let mut balances = HashMap::from([
             ("main".to_string(), dec!(10000.00)),
             ("mortgage".to_string(), dec!(500000.00)),
         ]);
+        set_opening_balances(&mut balances);
+        balances
+    }
+
+
+    fn make_config(mortgage_deduction_day: u32) -> Config {
+        let mut accounts = HashMap::from([
+            ("main".to_string(), dec!(10000.00)),
+            ("mortgage".to_string(), dec!(500000.00)),
+            ("motgage_income".to_string(), dec!(0.00)),
+            (SALARY_INCOME.to_string(), dec!(0.00))
+        ]);
+        set_default_accounts(&mut accounts);
         Config {
             transactions: vec![
                 Transaction::Mortgage {
@@ -219,7 +231,8 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_with_salary() {
         let config = make_config(5);
-        let balances = make_balances();
+        let mut balances = make_balances();
+        set_default_accounts(&mut balances);
         let next = compute_next_day_balances(
             &config,
             &balances,
@@ -237,6 +250,7 @@ start_date: "2025-01-01"
         });
         let mut balances = make_balances();
         balances.insert("main".to_string(), dec!(5000.00));
+        set_default_accounts(&mut balances);
         let next = compute_next_day_balances(
             &config,
             &balances,
