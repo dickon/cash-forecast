@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::fs;
 
 const SALARY_INCOME: &str = "salary_income";
+const MORTGAGE_INCOME: &str = "mortgage_income";
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
@@ -85,6 +86,10 @@ fn set_default_accounts(balances: &mut std::collections::HashMap<String, Decimal
     if !balances.contains_key(SALARY_INCOME) {
         balances.insert(SALARY_INCOME.to_string(), Decimal::ZERO);
     }
+    // Add mortgage_income account with initial balance of 0 if it is absent
+    if !balances.contains_key(MORTGAGE_INCOME) {
+        balances.insert(MORTGAGE_INCOME.to_string(), Decimal::ZERO);
+    }
 }
 
 fn compute_next_day_balances(
@@ -145,6 +150,7 @@ mod tests {
             ("main".to_string(), dec!(10000.00)),
             ("mortgage".to_string(), dec!(500000.00)),
         ]);
+        set_default_accounts(&mut balances);
         set_opening_balances(&mut balances);
         balances
     }
@@ -154,7 +160,7 @@ mod tests {
         let mut accounts = HashMap::from([
             ("main".to_string(), dec!(10000.00)),
             ("mortgage".to_string(), dec!(500000.00)),
-            ("motgage_income".to_string(), dec!(0.00)),
+            (MORTGAGE_INCOME.to_string(), dec!(0.00)),
             (SALARY_INCOME.to_string(), dec!(0.00))
         ]);
         set_default_accounts(&mut accounts);
@@ -192,12 +198,19 @@ transactions:
 accounts:
   main: 10000.00
   mortgage: 500000.00
+  salary_income: 0.00
+  mortgage_income: 0.00
 
 currency_symbol: "£"
 start_date: "2025-01-01"
 "#;
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
-        assert_eq!(config, make_config(1));
+        let expected = make_config(1);
+        assert_eq!(
+            config, expected,
+            "Config parsed from YAML does not match expected.\nParsed: {:#?}\nExpected: {:#?}",
+            config, expected
+        );
         let account = config.accounts.get("main").unwrap();
         assert_eq!(*account, dec!(10000.00));
         assert_eq!(config.currency_symbol, "£");
@@ -249,14 +262,13 @@ start_date: "2025-01-01"
             day: 7,
         });
         let mut balances = make_balances();
-        balances.insert("main".to_string(), dec!(5000.00));
         set_default_accounts(&mut balances);
         let next = compute_next_day_balances(
             &config,
             &balances,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 7).unwrap(),
         );
-        assert_eq!(next["main"], dec!(5000.00) + dec!(1500.00) - dec!(123.45));
+        assert_eq!(next["main"], dec!(10000.00) + dec!(1500.00) - dec!(123.45));
     }
 
     #[test]
@@ -266,27 +278,25 @@ start_date: "2025-01-01"
             amount: dec!(1000.00),
             day: 15,
         });
-        let mut balances = make_balances();
-        balances.insert("main".to_string(), dec!(8000.00));
+        let balances = make_balances();
         let next = compute_next_day_balances(
             &config,
             &balances,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 15).unwrap(),
         );
-        assert_eq!(next["main"], dec!(8000.00) + dec!(1000.00));
+        assert_eq!(next["main"], dec!(10000.00) + dec!(1000.00));
     }
 
     #[test]
     fn test_compute_next_day_balances_with_salary_none() {
         let config = make_config(20);
         let mut balances = make_balances();
-        balances.insert("main".to_string(), dec!(9000.00));
         let next = compute_next_day_balances(
             &config,
             &balances,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 20).unwrap(),
         );
-        assert_eq!(next["main"], dec!(9000.00) - dec!(123.45));
+        assert_eq!(next["main"], dec!(10000.00) - dec!(123.45));
     }
 
     #[test]
