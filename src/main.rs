@@ -69,22 +69,31 @@ fn main() {
         }
     };
 
-    
-    let mut date = config.start_date;
+    run(config, 600, true);
+}
+
+fn run(
+    config: Config,
+    days_to_run: i32,
+    show_monthly_positions: bool,
+) -> std::collections::HashMap<String, Decimal> {
+    let mut date: chrono::NaiveDate = config.start_date;
     let accounts_with_defaults: std::collections::HashMap<String, Decimal> = add_default_accounts(&config.accounts);
     let mut balances = add_opening_balances(&accounts_with_defaults);
-
-    for _ in 0..600 {
+    for _ in 0..days_to_run {
         date = date + chrono::Duration::days(1);
         balances = compute_next_day_balances(&config, &balances, date);
 
-        // Print a position on last day of month
-        if date.month() != (date + chrono::Duration::days(1)).month() {
-            for (name, balance) in balances.iter() {
-                print_balance_named(name, date, *balance, &config.currency_symbol);
+        if show_monthly_positions {
+            // Print a position on the first day of the month
+            if date.day() == 1 {
+                for (name, balance) in balances.iter() {
+                    print_balance_named(name, date, *balance, &config.currency_symbol);
+                }
             }
         }
     }
+    balances
 }
 
 fn add_opening_balances(
