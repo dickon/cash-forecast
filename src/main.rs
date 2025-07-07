@@ -339,6 +339,28 @@ start_date: "2025-01-01"
         assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) + dec!(2000.00));
         assert_eq!(history.len(), days as usize, "History should have one entry per day");
     }
+
+    #[test]
+    fn test_run_final_balances_after_salary_and_mortgage() {
+        let config = create_test_accounts(1);
+        let balances = config.accounts.clone();
+        let days = 6; // On day 6, salary is paid
+        let history = super::run(&config, balances, days);
+        let final_balances = &history.last().unwrap().1;
+        // Salary should be added on day 6
+        assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) + dec!(2000.00));
+    }
+
+    #[test]
+    fn test_run_mortgage_deduction_applied() {
+        let config = create_test_accounts(3);
+        let balances = config.accounts.clone();
+        let days = 3; // On day 3, mortgage is deducted
+        let history = super::run(&config, balances, days);
+        let final_balances = &history.last().unwrap().1;
+        // Mortgage should be deducted on day 3
+        assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) - dec!(123.45));
+    }
 }
 
 
