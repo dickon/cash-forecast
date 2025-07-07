@@ -153,8 +153,8 @@ mod tests {
             ("main".to_string(), dec!(10000.00)),
             ("mortgage".to_string(), dec!(500000.00)),
         ]);
-        let accounts = super::add_default_accounts(&accounts);
-        let accounts_with_opening = add_opening_balances(&accounts);
+        let accounts_with_defaults = super::add_default_accounts(&accounts);
+        let accounts_with_opening = add_opening_balances(&accounts_with_defaults);
         Config {
             transactions: vec![
                 Transaction::Mortgage {
