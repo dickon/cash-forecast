@@ -20,6 +20,8 @@ enum Transaction {
     Mortgage {
         deduction_amount: Decimal,
         deduction_day: u32,
+        from: String,
+        to: String
     },
     #[serde(rename = "salary")]
     Salary {
@@ -70,12 +72,12 @@ fn compute_next_day_balances(
 
         for transaction in &config.transactions {
             match transaction {
-                Transaction::Mortgage { deduction_amount, deduction_day } => {
+                Transaction::Mortgage { deduction_amount, deduction_day, from, to } => {
                     if date.day() == *deduction_day {
-                        if name == "main" {
+                        if name == from {
                             next_balance -= *deduction_amount;
                         }
-                        if name == "mortgage" {
+                        if name == to {
                             next_balance += *deduction_amount;
                         }
                     }
@@ -127,6 +129,8 @@ mod tests {
                 Transaction::Mortgage {
                     deduction_amount: dec!(123.45),
                     deduction_day: mortgage_deduction_day,
+                    from: "main".to_string(),
+                    to: "mortgage".to_string(),
                 },
                 Transaction::Salary {
                     amount: dec!(2000.00),
@@ -146,6 +150,8 @@ transactions:
   - type: mortgage
     deduction_amount: 123.45
     deduction_day: 1
+    from: main
+    to: mortgage
   - type: salary
     amount: 2000.00
     day: 6
@@ -254,6 +260,8 @@ transactions:
   - type: mortgage
     deduction_amount: 123.45
     deduction_day: 1
+    from: main
+    to: mortgage
   - type: salary
     amount: 2500.00
     day: 28
