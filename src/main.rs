@@ -71,11 +71,20 @@ fn main() {
     let accounts_with_defaults = add_default_accounts(&config.accounts);
     let balances = add_opening_balances(&accounts_with_defaults);
 
-    run(config, balances, 600, true);
+    let history = run(&config, balances, 600, true);
+    // Print the history of balances
+    for (date, balances) in history {
+        if date.day() == 1 {
+            println!("Balances on {date}:");
+            for (name, balance) in &balances {
+                print_balance_named(name, date, *balance, &config.currency_symbol); 
+            }
+        }
+    }
 }
 
 fn run(
-    config: Config,
+    config: &Config,
     balances: std::collections::HashMap<String, Decimal>,
     days_to_run: i32,
     show_monthly_positions: bool,
@@ -86,7 +95,7 @@ fn run(
 
     for _ in 0..days_to_run {
         date = date + chrono::Duration::days(1);
-        balances = compute_next_day_balances(&config, &balances, date);
+        balances = compute_next_day_balances(config, &balances, date);
 
         if show_monthly_positions {
             // Print a position on the first day of the month
@@ -331,7 +340,7 @@ start_date: "2025-01-01"
         let config = create_test_accounts(1);
         println!("Config: {:#?}", config);
         let balances = config.accounts.clone();
-        let history = super::run(config, balances, 30, false);
+        let history = super::run(&config, balances, 30, false);
         let final_balances = history.last().expect("History should not be empty").1.clone();
         // The sum of all balances should be zero (by design)
         let total: Decimal = final_balances.values().copied().sum();
