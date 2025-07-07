@@ -163,6 +163,7 @@ mod tests {
             ("mortgage".to_string(), dec!(500000.00)),
         ]);
         let accounts = super::add_default_accounts(&accounts);
+        let accounts_with_opening = add_opening_balances(&accounts);
         Config {
             transactions: vec![
                 Transaction::Mortgage {
@@ -176,7 +177,7 @@ mod tests {
                     day: 6,
                 },
             ],
-            accounts,
+            accounts: accounts_with_opening,
             currency_symbol: "£".to_string(),
             start_date: chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
         }
@@ -197,13 +198,15 @@ transactions:
 accounts:
   main: 10000.00
   mortgage: 500000.00
-  salary_income: 0.00
-  mortgage_income: 0.00
-  # salary_income and mortgage_income omitted to test defaulting
 currency_symbol: "£"
 start_date: "2025-01-01"
 "#;
-        let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
+        let original_config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
+        // make a config  with default accounts and opening balances
+        let mut config = original_config;
+        config.accounts = add_default_accounts(&config.accounts);
+        config.accounts = add_opening_balances(&config.accounts);   
+        
         let expected = make_config(1);
         assert_eq!(
             config, expected,
@@ -218,10 +221,9 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_no_deduction() {
         let config = make_config(2);
-        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
-            &balances,
+            &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
         );
         assert_eq!(next["main"], dec!(10000.00));
