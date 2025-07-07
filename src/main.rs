@@ -71,11 +71,11 @@ fn main() {
     let accounts_with_defaults = add_default_accounts(&config.accounts);
     let balances = add_opening_balances(&accounts_with_defaults);
 
-    let history = run(&config, balances, 600, true);
+    let history = run(&config, balances, 600);
     // Print the history of balances
     for (date, balances) in history {
         if date.day() == 1 {
-            println!("Balances on {date}:");
+            println!("\nBalances on {date}:");
             for (name, balance) in &balances {
                 print_balance_named(name, date, *balance, &config.currency_symbol); 
             }
@@ -86,8 +86,7 @@ fn main() {
 fn run(
     config: &Config,
     balances: std::collections::HashMap<String, Decimal>,
-    days_to_run: i32,
-    show_monthly_positions: bool,
+    days_to_run: i32
 ) -> Vec<(chrono::NaiveDate, std::collections::HashMap<String, Decimal>)> {
     let mut balances = balances;
     let mut date: chrono::NaiveDate = config.start_date;
@@ -96,15 +95,6 @@ fn run(
     for _ in 0..days_to_run {
         date = date + chrono::Duration::days(1);
         balances = compute_next_day_balances(config, &balances, date);
-
-        if show_monthly_positions {
-            // Print a position on the first day of the month
-            if date.day() == 1 {
-                for (name, balance) in balances.iter() {
-                    print_balance_named(name, date, *balance, &config.currency_symbol);
-                }
-            }
-        }
         history.push((date, balances.clone()));
     }
     history
@@ -340,7 +330,7 @@ start_date: "2025-01-01"
         let config = create_test_accounts(1);
         println!("Config: {:#?}", config);
         let balances = config.accounts.clone();
-        let history = super::run(&config, balances, 30, false);
+        let history = super::run(&config, balances, 30);
         let final_balances = history.last().expect("History should not be empty").1.clone();
         // The sum of all balances should be zero (by design)
         let total: Decimal = final_balances.values().copied().sum();
