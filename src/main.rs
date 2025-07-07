@@ -53,6 +53,10 @@ fn main() {
     let mut date = config.start_date;
     let mut balances: std::collections::HashMap<String, Decimal> = config.accounts.clone();
 
+    // set opening_balances account in balances equal to sum of all accounts
+    let opening_balance: Decimal = balances.values().sum();
+    balances.insert("opening_balances".to_string(), -opening_balance);
+
     for _ in 0..600 {
         date = date + chrono::Duration::days(1);
         balances = compute_next_day_balances(&config, &balances, date);
@@ -73,32 +77,35 @@ fn compute_next_day_balances(
 ) -> std::collections::HashMap<String, Decimal> {
     let mut new_balances = balances.clone();
 
-    for (name, &balance) in balances {
-        let mut next_balance = balance;
-
-        for transaction in &config.transactions {
-            match transaction {
-                Transaction::Mortgage { deduction_amount, deduction_day, from, to } => {
-                    if date.day() == *deduction_day {
-                        if name == from {
-                            next_balance -= *deduction_amount;
-                        }
-                        if name == to {
-                            next_balance += *deduction_amount;
-                        }
-                    }
+    // For each transaction, apply its effect to the relevant accounts
+    for transaction in &config.transactions {
+        match transaction {
+            Transaction::Mortgage { deduction_amount, deduction_day, from, to } => {
+                if date.day() == *deduction_day {
+                    *new_balances.get_mut(from).expect("From account not found in balances") -= *deduction_amount;
+                    *new_balances.get_mut(to).expect("To account not found in balances") += *deduction_amount;
                 }
-                Transaction::Salary { amount, day } => {
-                    if name == "main" && date.day() == *day {
-                        next_balance += *amount;
-                    }
+            }
+            Transaction::Salary { amount, day } => {
+                if date.day() == *day {
+                    *new_balances.get_mut("main").expect("Main account not found for salary") += *amount;
+                    *new_balances.get_mut("salary_income").expect("salary_income not found for salary") -= *amount;
                 }
             }
         }
-
-        new_balances.insert(name.clone(), next_balance);
     }
 
+    // assert balances sum to zero
+    let total_balance: Decimal = new_balances.values().sum();
+    if total_balance != Decimal::ZERO {
+        // print all balances
+        for (name, balance) in &new_balances {
+            print_balance_named(name, date, *balance, &config.currency_symbol);
+        }
+        // print error message and exit
+        eprintln!("Error: Balances do not sum to zero on {date}: {total_balance}");
+        std::process::exit(1);
+    }
     new_balances
 }
 
@@ -117,6 +124,7 @@ mod tests {
     use super::*;
     use rust_decimal_macros::dec;
     use std::collections::HashMap;
+use itertools::Itertools;
 
     fn make_balances() -> HashMap<String, Decimal> {
         HashMap::from([
