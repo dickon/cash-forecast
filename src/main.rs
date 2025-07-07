@@ -6,6 +6,7 @@ use std::fs;
 const MAIN_ACCOUNT: &str = "main";
 const SALARY_INCOME: &str = "salary_income";
 const MORTGAGE_INCOME: &str = "mortgage_income";
+const MORTGAGE_ACCOUNT: &str = "mortgage";
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
@@ -51,7 +52,7 @@ fn default_main() -> String {
 }
 
 fn default_mortgage() -> String {
-    "mortgage".to_string()
+    MORTGAGE_ACCOUNT.to_string()
 }
 
 fn main() {
@@ -164,7 +165,7 @@ mod tests {
     fn create_test_accounts(mortgage_deduction_day: u32) -> Config {
         let accounts = HashMap::from([
             (MAIN_ACCOUNT.to_string(), dec!(10000.00)),
-            ("mortgage".to_string(), dec!(500000.00)),
+            (MORTGAGE_ACCOUNT.to_string(), dec!(500000.00)),
         ]);
         let accounts_with_defaults = super::add_default_accounts(&accounts);
         let accounts_with_opening = add_opening_balances(&accounts_with_defaults);
@@ -174,7 +175,7 @@ mod tests {
                     deduction_amount: dec!(123.45),
                     deduction_day: mortgage_deduction_day,
                     from: MAIN_ACCOUNT.to_string(),
-                    to: "mortgage".to_string(),
+                    to: MORTGAGE_ACCOUNT.to_string(),
                 },
                 Transaction::Salary {
                     amount: dec!(2000.00),
