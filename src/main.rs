@@ -330,12 +330,14 @@ start_date: "2025-01-01"
         let config = create_test_accounts(1);
         println!("Config: {:#?}", config);
         let balances = config.accounts.clone();
-        let history = super::run(&config, balances, 30);
+        let days = 30; // Run for 30 days
+        let history = super::run(&config, balances, days);
         let final_balances = history.last().expect("History should not be empty").1.clone();
         // The sum of all balances should be zero (by design)
         let total: Decimal = final_balances.values().copied().sum();
         assert_eq!(total, Decimal::ZERO);
         assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) + dec!(2000.00));
+        assert_eq!(history.len(), days as usize, "History should have one entry per day");
     }
 }
 
