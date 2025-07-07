@@ -361,6 +361,18 @@ start_date: "2025-01-01"
         // Mortgage should be deducted on day 3
         assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) - dec!(123.45));
     }
+
+    #[test]
+    fn test_run_balances_sum_to_zero_each_day() {
+        let config = create_test_accounts(1);
+        let balances = config.accounts.clone();
+        let days = 15;
+        let history = super::run(&config, balances, days);
+        for (date, balances) in history {
+            let total: Decimal = balances.values().copied().sum();
+            assert_eq!(total, Decimal::ZERO, "Balances do not sum to zero on {date}");
+        }
+}
 }
 
 
