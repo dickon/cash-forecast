@@ -79,9 +79,11 @@ fn run(
     balances: std::collections::HashMap<String, Decimal>,
     days_to_run: i32,
     show_monthly_positions: bool,
-) -> std::collections::HashMap<String, Decimal> {
+) -> Vec<(chrono::NaiveDate, std::collections::HashMap<String, Decimal>)> {
     let mut balances = balances;
     let mut date: chrono::NaiveDate = config.start_date;
+    let mut history = Vec::new();
+
     for _ in 0..days_to_run {
         date = date + chrono::Duration::days(1);
         balances = compute_next_day_balances(&config, &balances, date);
@@ -94,8 +96,9 @@ fn run(
                 }
             }
         }
+        history.push((date, balances.clone()));
     }
-    balances
+    history
 }
 
 fn add_opening_balances(
@@ -328,9 +331,9 @@ start_date: "2025-01-01"
         let config = create_test_accounts(1);
         println!("Config: {:#?}", config);
         let balances = config.accounts.clone();
-        let final_balances = super::run(config, balances, 30, false);
+        let history = super::run(config, balances, 30, false);
+        let final_balances = history.last().expect("History should not be empty").1.clone();
         // The sum of all balances should be zero (by design)
-        println!("Final balances: {:#?}", final_balances);
         let total: Decimal = final_balances.values().copied().sum();
         assert_eq!(total, Decimal::ZERO);
         assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) + dec!(2000.00));
