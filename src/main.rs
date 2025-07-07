@@ -148,15 +148,6 @@ mod tests {
     use rust_decimal_macros::dec;
     use std::collections::HashMap;
 
-    fn create_test_balances() -> HashMap<String, Decimal> {
-        let balances = HashMap::from([
-            ("main".to_string(), dec!(10000.00)),
-            ("mortgage".to_string(), dec!(500000.00)),
-        ]);
-        let balances = super::add_default_accounts(&balances);
-        add_opening_balances(&balances)
-    }
-
     fn create_test_accounts(mortgage_deduction_day: u32) -> Config {
         let accounts = HashMap::from([
             ("main".to_string(), dec!(10000.00)),
@@ -243,10 +234,9 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_with_salary() {
         let config = create_test_accounts(5);
-        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
-            &balances,
+            &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 6).unwrap(),
         );
         assert_eq!(next["main"], dec!(10000.00) + dec!(2000.00));
@@ -259,10 +249,9 @@ start_date: "2025-01-01"
             amount: dec!(1500.00),
             day: 7,
         });
-        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
-            &balances,
+            &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 7).unwrap(),
         );
         assert_eq!(next["main"], dec!(10000.00) + dec!(1500.00) - dec!(123.45));
@@ -275,10 +264,9 @@ start_date: "2025-01-01"
             amount: dec!(1000.00),
             day: 15,
         });
-        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
-            &balances,
+            &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 15).unwrap(),
         );
         assert_eq!(next["main"], dec!(10000.00) + dec!(1000.00));
@@ -287,10 +275,9 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_with_salary_none() {
         let config = create_test_accounts(20);
-        let balances = create_test_balances();
         let next = compute_next_day_balances(
             &config,
-            &balances,
+            &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 20).unwrap(),
         );
         assert_eq!(next["main"], dec!(10000.00) - dec!(123.45));
