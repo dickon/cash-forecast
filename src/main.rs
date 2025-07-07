@@ -3,6 +3,8 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 use std::fs;
 
+const SALARY_INCOME: &str = "salary_income";
+
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
     transactions: Vec<Transaction>,
@@ -39,7 +41,10 @@ fn default_start_date() -> chrono::NaiveDate {
 }
 
 fn main() {
+
+    // Yes this function can be written as pure stateless code, using for instance a fold, and Copilot can do that, but this mutable is more traditional and maintainable
     // Load config from YAML
+    
     let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
     let config: Config = match serde_yaml::from_str(&yaml) {
         Ok(cfg) => cfg,
@@ -49,11 +54,15 @@ fn main() {
         }
     };
 
-    // Yes this can be written as a fold, and Copilot can do that, but this mutable is more traditional and maintainable
+    
     let mut date = config.start_date;
     let mut balances: std::collections::HashMap<String, Decimal> = config.accounts.clone();
 
-    // set opening_balances account in balances equal to sum of all accounts
+    // Add salary_income account with initial balance of 0 if it is absent
+    if !balances.contains_key(SALARY_INCOME) {
+        balances.insert(SALARY_INCOME.to_string(), Decimal::ZERO);
+    }
+
     let opening_balance: Decimal = balances.values().sum();
     balances.insert("opening_balances".to_string(), -opening_balance);
 
@@ -89,7 +98,7 @@ fn compute_next_day_balances(
             Transaction::Salary { amount, day } => {
                 if date.day() == *day {
                     *new_balances.get_mut("main").expect("Main account not found for salary") += *amount;
-                    *new_balances.get_mut("salary_income").expect("salary_income not found for salary") -= *amount;
+                    *new_balances.get_mut(SALARY_INCOME).expect("salary_income not found for salary") -= *amount;
                 }
             }
         }

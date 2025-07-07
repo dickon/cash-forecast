@@ -11,6 +11,5 @@ transactions:
 accounts:
   main: 10000.00
   mortgage: -500000.00
-  salary_income: 0.00
 currency_symbol: "£"
 
