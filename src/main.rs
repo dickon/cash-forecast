@@ -56,10 +56,7 @@ fn default_mortgage() -> String {
 }
 
 fn main() {
-
-    // Yes this function can be written as pure stateless code, using for instance a fold, and Copilot can do that, but this mutable is more traditional and maintainable
     // Load config from YAML
-
     let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
     let config: Config = match serde_yaml::from_str(&yaml) {
         Ok(cfg) => cfg,
@@ -69,17 +66,20 @@ fn main() {
         }
     };
 
-    run(config, 600, true);
+    // Work out balances before running
+    let accounts_with_defaults = add_default_accounts(&config.accounts);
+    let balances = add_opening_balances(&accounts_with_defaults);
+
+    run(config, balances, 600, true);
 }
 
 fn run(
     config: Config,
+    mut balances: std::collections::HashMap<String, Decimal>,
     days_to_run: i32,
     show_monthly_positions: bool,
 ) -> std::collections::HashMap<String, Decimal> {
     let mut date: chrono::NaiveDate = config.start_date;
-    let accounts_with_defaults: std::collections::HashMap<String, Decimal> = add_default_accounts(&config.accounts);
-    let mut balances = add_opening_balances(&accounts_with_defaults);
     for _ in 0..days_to_run {
         date = date + chrono::Duration::days(1);
         balances = compute_next_day_balances(&config, &balances, date);
