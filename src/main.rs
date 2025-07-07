@@ -41,7 +41,13 @@ fn default_start_date() -> chrono::NaiveDate {
 fn main() {
     // Load config from YAML
     let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
-    let config: Config = serde_yaml::from_str(&yaml).expect("Failed to parse YAML");
+    let config: Config = match serde_yaml::from_str(&yaml) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("YAML parsing error: {e}");
+            std::process::exit(1);
+        }
+    };
 
     // Yes this can be written as a fold, and Copilot can do that, but this mutable is more traditional and maintainable
     let mut date = config.start_date;
