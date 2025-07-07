@@ -211,34 +211,31 @@ start_date: "2025-01-01"
 
     #[test]
     fn test_compute_next_day_balances_no_deduction() {
-        let config = create_test_accounts(2);
-        let next = compute_next_day_balances(
-            &config,
-            &config.accounts,
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
-        );
+        let mortgage_deduction_day = 2;
+        let test_day = 5;
+        let next = make_accounts_for_day(mortgage_deduction_day, test_day);
         assert_eq!(next["main"], dec!(10000.00));
     }
 
-    #[test]
-    fn test_compute_next_day_balances_with_deduction() {
-        let config = create_test_accounts(3);
+    fn make_accounts_for_day(mortgage_deduction_day: u32, test_day: u32) -> HashMap<String, Decimal> {
+        let config = create_test_accounts(mortgage_deduction_day);
         let next = compute_next_day_balances(
             &config,
             &config.accounts,
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 3).unwrap(),
+            chrono::NaiveDate::from_ymd_opt(2025, 1, test_day).unwrap(),
         );
+        next
+    }
+    
+    #[test]
+    fn test_compute_next_day_balances_with_deduction() {
+        let next = make_accounts_for_day(3, 3);
         assert_eq!(next["main"], dec!(10000.00) - dec!(123.45));
     }
 
     #[test]
     fn test_compute_next_day_balances_with_salary() {
-        let config = create_test_accounts(5);
-        let next = compute_next_day_balances(
-            &config,
-            &config.accounts,
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 6).unwrap(),
-        );
+        let next= make_accounts_for_day(5, 6);
         assert_eq!(next["main"], dec!(10000.00) + dec!(2000.00));
     }
 
@@ -274,12 +271,7 @@ start_date: "2025-01-01"
 
     #[test]
     fn test_compute_next_day_balances_with_salary_none() {
-        let config = create_test_accounts(20);
-        let next = compute_next_day_balances(
-            &config,
-            &config.accounts,
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 20).unwrap(),
-        );
+        let next = make_accounts_for_day(20, 20);
         assert_eq!(next["main"], dec!(10000.00) - dec!(123.45));
     }
 
