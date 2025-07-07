@@ -44,7 +44,7 @@ fn main() {
 
     // Yes this function can be written as pure stateless code, using for instance a fold, and Copilot can do that, but this mutable is more traditional and maintainable
     // Load config from YAML
-    
+
     let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
     let config: Config = match serde_yaml::from_str(&yaml) {
         Ok(cfg) => cfg,
@@ -133,7 +133,6 @@ mod tests {
     use super::*;
     use rust_decimal_macros::dec;
     use std::collections::HashMap;
-use itertools::Itertools;
 
     fn make_balances() -> HashMap<String, Decimal> {
         HashMap::from([
