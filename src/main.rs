@@ -296,6 +296,7 @@ start_date: "2025-01-01"
         assert_eq!(next[MAIN_ACCOUNT], dec!(10000.00) + dec!(1000.00));
     }
 
+    
     #[test]
     fn test_compute_next_day_balances_with_salary_none() {
         let next = make_accounts_for_day(20, 20);
@@ -405,6 +406,44 @@ start_date: "2025-01-01"
             "Salary not paid correctly on salary day"
         );
     }    
+
+
+    #[test]
+    fn test_run_multiple_transactions_same_day() {
+        let mut config = create_test_accounts(3);
+        config.transactions.push(Transaction::Salary {
+            amount: dec!(500.00),
+            day: 3,
+            to: MAIN_ACCOUNT.to_string(),
+        });
+        let balances = config.accounts.clone();
+        let days = 3;
+        let history = super::run(&config, balances, days);
+        let final_balances = &history.last().unwrap().1;
+        // On day 3, both mortgage and salary should be applied
+        assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) - dec!(123.45) + dec!(500.00));
+    }
+
+    #[test]
+    fn test_run_salary_to_different_account() {
+        let mut config = create_test_accounts(6);
+        // Add a new account and pay salary to it
+        let alt_account = "alt_account";
+        let mut accounts = config.accounts.clone();
+        accounts.insert(alt_account.to_string(), dec!(0.00));
+        config.accounts = accounts;
+        config.transactions[1] = Transaction::Salary {
+            amount: dec!(2000.00),
+            day: 6,
+            to: alt_account.to_string(),
+        };
+        let balances = config.accounts.clone();
+        let days = 6;
+        let history = super::run(&config, balances, days);
+        let final_balances = &history.last().unwrap().1;
+        assert_eq!(final_balances[alt_account], dec!(2000.00));
+        assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) -dec!(123.45)); // mortgage deducted
+    }
 }
 
 
