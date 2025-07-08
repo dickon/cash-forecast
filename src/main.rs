@@ -372,7 +372,31 @@ start_date: "2025-01-01"
             let total: Decimal = balances.values().copied().sum();
             assert_eq!(total, Decimal::ZERO, "Balances do not sum to zero on {date}");
         }
+    }
+
+    #[test]
+    fn test_run_salary_paid_on_correct_day() {
+        let config = create_test_accounts(15);
+        let balances = config.accounts.clone();
+        let days = 10;
+        let history = super::run(&config, balances, days);
+        // Salary is paid on day 6, so check balance before and after
+        let before = &history[3];
+        let after = &history[4];
+        assert_eq!(before.0.day(), 5);
+        assert_eq!(after.0.day(), 6);
+        
+        let before_salary  = &before.1[MAIN_ACCOUNT]; // day 5
+        let after_salary = &after.1[MAIN_ACCOUNT];  // day 6
+        // print history
+        println!("History: {:#?}", history);
+        assert_eq!(
+            *after_salary,
+            *before_salary + dec!(2000.00),
+            "Salary not paid correctly on salary day"
+        );
+    }    
 }
-}
+
 
 
