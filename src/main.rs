@@ -381,11 +381,20 @@ start_date: "2025-01-01"
         let days = 10;
         let history = super::run(&config, balances, days);
         // Salary is paid on day 6, so check balance before and after
-        let before = &history[3];
-        let after = &history[4];
-        assert_eq!(before.0.day(), 5);
-        assert_eq!(after.0.day(), 6);
-        
+        // get the salary day from config
+        assert!(config.transactions.len() > 1, "Config should have at least two transactions");
+        assert!(matches!(config.transactions[1], Transaction::Salary { .. }), "Second transaction should be a Salary transaction");
+        let salary_day = if let Transaction::Salary { day, .. } = &config.transactions[1] {
+            *day
+        } else {
+            panic!("Expected second transaction to be a Salary transaction");
+        };
+        assert_eq!(salary_day, 6, "Salary day should be 6");
+        let before = &history[salary_day as usize - 3]; // day 5
+        let after = &history[salary_day as usize - 2];        
+        assert_eq!(before.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap());
+        assert_eq!(after.0, chrono::NaiveDate::from_ymd_opt(2025, 1, 6).unwrap());
+        // Check salary was paid correctly
         let before_salary  = &before.1[MAIN_ACCOUNT]; // day 5
         let after_salary = &after.1[MAIN_ACCOUNT];  // day 6
         // print history
