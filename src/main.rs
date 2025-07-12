@@ -58,7 +58,13 @@ fn default_mortgage() -> String {
 
 fn main() {
     // Load config from YAML
-    let yaml = fs::read_to_string("config.yaml").expect("Failed to read config.yaml");
+    // read from actual.yaml if it exists, otherwise from config.yaml
+    let config_file = if fs::metadata("actual.yaml").is_ok() {
+        "actual.yaml"
+    } else {
+        "config.yaml"
+    };
+    let yaml = fs::read_to_string(config_file).expect("Failed to read config file");
     let config: Config = match serde_yaml::from_str(&yaml) {
         Ok(cfg) => cfg,
         Err(e) => {
