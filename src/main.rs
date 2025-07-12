@@ -1,5 +1,6 @@
 use chrono::Datelike;
 use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use serde::Deserialize;
 use std::fs;
 
@@ -30,6 +31,8 @@ enum Transaction {
         from: String,
         #[serde(default = "default_mortgage")]
         to: String,
+        #[serde(default = "default_interest_rate")]
+        interest_rate: Decimal,
     },
     #[serde(rename = "salary")]
     Salary {
@@ -63,6 +66,10 @@ fn default_main() -> String {
 
 fn default_mortgage() -> String {
     MORTGAGE_ACCOUNT.to_string()
+}
+
+fn default_interest_rate() -> Decimal {
+    Decimal::ZERO
 }
 
 fn main() {
@@ -147,10 +154,18 @@ fn compute_next_day_balances(
     // For each transaction, apply its effect to the relevant accounts
     for transaction in &config.transactions {
         match transaction {
-            Transaction::Mortgage { deduction_amount, deduction_day, from, to } => {
+            Transaction::Mortgage { deduction_amount, deduction_day, from, to, interest_rate } => {
                 if date.day() == *deduction_day {
                     *new_balances.get_mut(from).expect("From account not found in balances") -= *deduction_amount;
                     *new_balances.get_mut(to).expect("To account not found in balances") += *deduction_amount;
+                    
+                    // Apply interest to mortgage balance (monthly interest)
+                    if *interest_rate > Decimal::ZERO {
+                        let current_mortgage_balance = *new_balances.get(to).unwrap();
+                        let monthly_interest = current_mortgage_balance * (*interest_rate / dec!(12) / dec!(100));
+                        *new_balances.get_mut(to).expect("To account not found for interest") += monthly_interest;
+                        *new_balances.get_mut(MORTGAGE_INCOME).expect("mortgage_income not found for interest") -= monthly_interest;
+                    }
                 }
             }
             Transaction::Salary { amount, day, to } => {
@@ -210,6 +225,7 @@ mod tests {
                     deduction_day: mortgage_deduction_day,
                     from: MAIN_ACCOUNT.to_string(),
                     to: MORTGAGE_ACCOUNT.to_string(),
+                    interest_rate: dec!(5.0), // 5% annual interest rate
                 },
                 Transaction::Salary {
                     amount: dec!(2000.00),
@@ -230,6 +246,7 @@ transactions:
   - type: mortgage
     deduction_amount: 123.45
     deduction_day: 1
+    interest_rate: 5.0
   - type: salary
     amount: 2000.00
     day: 6
@@ -563,6 +580,7 @@ start_date: "2025-01-01"
             deduction_day: 7,
             from: MAIN_ACCOUNT.to_string(),
             to: MORTGAGE_ACCOUNT.to_string(),
+            interest_rate: dec!(5.0),
         };
         config.transactions[1] = Transaction::Salary {
             amount: dec!(2000.00),
