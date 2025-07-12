@@ -167,13 +167,9 @@ fn compute_next_day_balances(
         match transaction {
             Transaction::Mortgage { deduction_amount, deduction_day, from, to } => {
                 if date.day() == *deduction_day {
-                    let from_balance = *new_balances.get(from).expect("from account not found in balances");
+                    let to_balance = *new_balances.get(to).expect("from account not found in balances");
                     // Only deduct what's available in the from account (prevent going below zero)
-                    let actual_deduction = if from_balance > Decimal::ZERO {
-                        (*deduction_amount).min(from_balance)
-                    } else {
-                        Decimal::ZERO  // Can't deduct anything from negative or zero balance
-                    };
+                    let actual_deduction = (*deduction_amount).min(-to_balance);
                     assert!(actual_deduction <= *deduction_amount);
                     assert!(actual_deduction >= Decimal::ZERO, "Mortgage deduction amount must be non-negative; is {actual_deduction}");
                     *new_balances.get_mut(from).expect("From account not found in balances") -= actual_deduction;
