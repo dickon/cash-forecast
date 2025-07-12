@@ -101,15 +101,19 @@ fn main() {
     let balances = add_opening_balances(&accounts_with_defaults);
 
     let history = run(&config, balances, 600);
+    
     // Print the history of balances
-    for (date, balances) in history {
+    for (date, balances) in &history {
         if date.day() == 1 {
             println!("\nBalances on {date}:");
-            for (name, balance) in &balances {
-                print_balance_named(name, date, *balance, &config.currency_symbol); 
+            for (name, balance) in balances {
+                print_balance_named(name, *date, *balance, &config.currency_symbol); 
             }
         }
     }
+    
+    // Create plots for mortgage balance over time
+    create_mortgage_plots(&history, &config.currency_symbol);
 }
 
 fn run(
@@ -212,6 +216,115 @@ fn print_balance_named(name: &str, date: chrono::NaiveDate, balance: Decimal, cu
         symbol = currency_symbol,
         v = balance
     );
+}
+
+fn create_mortgage_plots(
+    history: &[(chrono::NaiveDate, std::collections::HashMap<String, Decimal>)],
+    currency_symbol: &str,
+) {
+    // Extract dates and mortgage balances
+    let mut csv_lines = vec!["Date,Balance".to_string()];
+    
+    for (date, balances) in history {
+        if let Some(mortgage_balance) = balances.get(MORTGAGE_ACCOUNT) {
+            csv_lines.push(format!("{},{}", date.format("%Y-%m-%d"), mortgage_balance));
+        }
+    }
+    
+    // Create CSV file
+    if let Err(e) = std::fs::write("/tmp/mortgage_balance.csv", csv_lines.join("\n")) {
+        eprintln!("Error creating CSV file: {}", e);
+    } else {
+        println!("Mortgage balance CSV data saved to '/tmp/mortgage_balance.csv'");
+    }
+    
+    // Create HTML plot with Chart.js
+    create_html_chart(&csv_lines, currency_symbol);
+}
+
+fn create_html_chart(csv_lines: &[String], currency_symbol: &str) {
+    // Skip header and extract data for JavaScript
+    let data_lines: Vec<&str> = csv_lines.iter().skip(1).map(|s| s.as_str()).collect();
+    
+    let mut dates = Vec::new();
+    let mut balances = Vec::new();
+    
+    for line in data_lines {
+        if let Some((date, balance)) = line.split_once(',') {
+            dates.push(format!("'{}'", date));
+            balances.push(balance.to_string());
+        }
+    }
+    
+    let html_content = format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Mortgage Balance Over Time</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        .chart-container {{ width: 90%; height: 400px; margin: 0 auto; }}
+        h1 {{ text-align: center; }}
+    </style>
+</head>
+<body>
+    <h1>Mortgage Balance Over Time</h1>
+    <div class="chart-container">
+        <canvas id="mortgageChart"></canvas>
+    </div>
+    
+    <script>
+        const ctx = document.getElementById('mortgageChart').getContext('2d');
+        const chart = new Chart(ctx, {{
+            type: 'line',
+            data: {{
+                labels: [{}],
+                datasets: [{{
+                    label: 'Mortgage Balance ({})',
+                    data: [{}],
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {{
+                    y: {{
+                        beginAtZero: false,
+                        title: {{
+                            display: true,
+                            text: 'Balance ({})'
+                        }}
+                    }},
+                    x: {{
+                        title: {{
+                            display: true,
+                            text: 'Date'
+                        }},
+                        ticks: {{
+                            maxTicksLimit: 10
+                        }}
+                    }}
+                }}
+            }}
+        }});
+    </script>
+</body>
+</html>"#,
+        dates.join(", "),
+        currency_symbol,
+        balances.join(", "),
+        currency_symbol
+    );
+    
+    if let Err(e) = std::fs::write("/tmp/mortgage_balance.html", html_content) {
+        eprintln!("Error creating HTML file: {}", e);
+    } else {
+        println!("Mortgage balance HTML chart saved to '/tmp/mortgage_balance.html'");
+    }
 }
 
 #[cfg(test)]
