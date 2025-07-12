@@ -38,6 +38,15 @@ enum Transaction {
         #[serde(default = "default_main")]
         to: String,
     },
+    #[serde(rename = "transfer")]
+    Transfer {
+        amount: Decimal,
+        day: u32,
+        #[serde(default = "default_main")]
+        from: String,
+        #[serde(default = "default_main")]
+        to: String,
+    },
 }
 
 fn default_currency_symbol() -> String {
@@ -148,6 +157,12 @@ fn compute_next_day_balances(
                 if date.day() == *day {
                     *new_balances.get_mut(to).expect("Salary 'to' account not found") += *amount;
                     *new_balances.get_mut(SALARY_INCOME).expect("salary_income not found for salary") -= *amount;
+                }
+            }
+            Transaction::Transfer { amount, day, from, to } => {
+                if date.day() == *day {
+                    *new_balances.get_mut(from).expect("Transfer 'from' account not found") -= *amount;
+                    *new_balances.get_mut(to).expect("Transfer 'to' account not found") += *amount;
                 }
             }
         }
@@ -449,6 +464,157 @@ start_date: "2025-01-01"
         let final_balances = &history.last().unwrap().1;
         assert_eq!(final_balances[alt_account], dec!(2000.00));
         assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) -dec!(123.45)); // mortgage deducted
+    }
+
+    #[test]
+    fn test_transfer_between_accounts() {
+        let mut config = create_test_accounts(10); // No mortgage/salary on test day
+        let savings_account = "savings";
+        
+        // Add savings account
+        config.accounts.insert(savings_account.to_string(), dec!(0.00));
+        
+        // Add transfer transaction
+        config.transactions.push(Transaction::Transfer {
+            amount: dec!(500.00),
+            day: 5,
+            from: MAIN_ACCOUNT.to_string(),
+            to: savings_account.to_string(),
+        });
+        
+        let next = compute_next_day_balances(
+            &config,
+            &config.accounts,
+            chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
+        );
+        
+        assert_eq!(next[MAIN_ACCOUNT], dec!(10000.00) - dec!(500.00));
+        assert_eq!(next[savings_account], dec!(500.00));
+    }
+
+    #[test]
+    fn test_transfer_not_on_transfer_day() {
+        let mut config = create_test_accounts(10);
+        let savings_account = "savings";
+        
+        config.accounts.insert(savings_account.to_string(), dec!(0.00));
+        config.transactions.push(Transaction::Transfer {
+            amount: dec!(500.00),
+            day: 7,
+            from: MAIN_ACCOUNT.to_string(),
+            to: savings_account.to_string(),
+        });
+        
+        let next = compute_next_day_balances(
+            &config,
+            &config.accounts,
+            chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(), // Not transfer day
+        );
+        
+        // No transfer should occur
+        assert_eq!(next[MAIN_ACCOUNT], dec!(10000.00));
+        assert_eq!(next[savings_account], dec!(0.00));
+    }
+
+    #[test]
+    fn test_multiple_transfers_same_day() {
+        let mut config = create_test_accounts(10);
+        let savings_account = "savings";
+        let investment_account = "investments";
+        
+        config.accounts.insert(savings_account.to_string(), dec!(0.00));
+        config.accounts.insert(investment_account.to_string(), dec!(0.00));
+        
+        config.transactions.push(Transaction::Transfer {
+            amount: dec!(300.00),
+            day: 5,
+            from: MAIN_ACCOUNT.to_string(),
+            to: savings_account.to_string(),
+        });
+        
+        config.transactions.push(Transaction::Transfer {
+            amount: dec!(200.00),
+            day: 5,
+            from: MAIN_ACCOUNT.to_string(),
+            to: investment_account.to_string(),
+        });
+        
+        let next = compute_next_day_balances(
+            &config,
+            &config.accounts,
+            chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
+        );
+        
+        assert_eq!(next[MAIN_ACCOUNT], dec!(10000.00) - dec!(300.00) - dec!(200.00));
+        assert_eq!(next[savings_account], dec!(300.00));
+        assert_eq!(next[investment_account], dec!(200.00));
+    }
+
+    #[test]
+    fn test_transfer_with_salary_and_mortgage_same_day() {
+        let mut config = create_test_accounts(7); // Mortgage and salary on day 7
+        let savings_account = "savings";
+        
+        config.accounts.insert(savings_account.to_string(), dec!(0.00));
+        
+        // Change existing transactions to day 7
+        config.transactions[0] = Transaction::Mortgage {
+            deduction_amount: dec!(123.45),
+            deduction_day: 7,
+            from: MAIN_ACCOUNT.to_string(),
+            to: MORTGAGE_ACCOUNT.to_string(),
+        };
+        config.transactions[1] = Transaction::Salary {
+            amount: dec!(2000.00),
+            day: 7,
+            to: MAIN_ACCOUNT.to_string(),
+        };
+        
+        // Add transfer on same day
+        config.transactions.push(Transaction::Transfer {
+            amount: dec!(500.00),
+            day: 7,
+            from: MAIN_ACCOUNT.to_string(),
+            to: savings_account.to_string(),
+        });
+        
+        let next = compute_next_day_balances(
+            &config,
+            &config.accounts,
+            chrono::NaiveDate::from_ymd_opt(2025, 1, 7).unwrap(),
+        );
+        
+        // Main account: start + salary - mortgage - transfer
+        assert_eq!(next[MAIN_ACCOUNT], dec!(10000.00) + dec!(2000.00) - dec!(123.45) - dec!(500.00));
+        assert_eq!(next[savings_account], dec!(500.00));
+    }
+
+    #[test]
+    fn test_config_parsing_with_transfer() {
+        let yaml = r#"
+transactions:
+  - type: transfer
+    amount: 250.00
+    day: 10
+    from: main
+    to: savings
+accounts:
+  main: 5000.00
+  savings: 0.00
+currency_symbol: "£"
+start_date: "2025-01-01"
+"#;
+        let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
+        assert_eq!(config.transactions.len(), 1);
+        
+        if let Transaction::Transfer { amount, day, from, to } = &config.transactions[0] {
+            assert_eq!(*amount, dec!(250.00));
+            assert_eq!(*day, 10);
+            assert_eq!(from, "main");
+            assert_eq!(to, "savings");
+        } else {
+            panic!("Expected Transfer transaction");
+        }
     }
 }
 
