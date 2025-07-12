@@ -167,13 +167,14 @@ fn compute_next_day_balances(
         match transaction {
             Transaction::Mortgage { deduction_amount, deduction_day, from, to } => {
                 if date.day() == *deduction_day {
-                    let to_balance = *new_balances.get(to).expect("from account not found in balances");
-                    // Only deduct what's available in the from account (prevent going below zero)
+                    let to_balance = *new_balances.get(to).expect("mortgage (to) account not found in balances");
+                    // Only deduct at most what's left to pay in the mortgage account (prevent going above zreo)
                     let actual_deduction = (*deduction_amount).min(-to_balance);
                     assert!(actual_deduction <= *deduction_amount);
                     assert!(actual_deduction >= Decimal::ZERO, "Mortgage deduction amount must be non-negative; is {actual_deduction}");
                     *new_balances.get_mut(from).expect("From account not found in balances") -= actual_deduction;
                     *new_balances.get_mut(to).expect("To account not found in balances") += actual_deduction;
+                    assert!(new_balances.get(to).expect("To account not found after mortgage deduction") <= &Decimal::ZERO, "Mortgage account balance must not go above zero after deduction");
                 }
             }
             Transaction::Interest { rate, day, account, income_account } => {
@@ -341,7 +342,7 @@ mod tests {
     fn create_test_accounts(mortgage_deduction_day: u32) -> Config {
         let accounts = HashMap::from([
             (MAIN_ACCOUNT.to_string(), dec!(10000.00)),
-            (MORTGAGE_ACCOUNT.to_string(), dec!(500000.00)),
+            (MORTGAGE_ACCOUNT.to_string(), dec!(-500000.00)),
         ]);
         let accounts_with_defaults = super::add_default_accounts(&accounts);
         let accounts_with_opening = add_opening_balances(&accounts_with_defaults);
@@ -388,7 +389,7 @@ transactions:
     day: 6
 accounts:
   main: 10000.00
-  mortgage: 500000.00
+  mortgage: -500000.00
 currency_symbol: "£"
 start_date: "2025-01-01"
 "#;
@@ -435,7 +436,7 @@ start_date: "2025-01-01"
         // Calculate expected mortgage balance accounting for order of operations:
         // 1. Mortgage payment: 500000 + 123.45 = 500123.45
         // 2. Interest calculated on new balance: 500123.45 * (5% / 12 / 100) = 2083.85 (rounded)
-        let balance_after_payment = dec!(500000.00) + dec!(123.45);
+        let balance_after_payment = dec!(-500000.00) + dec!(123.45);
         let monthly_interest_exact = balance_after_payment * (dec!(5.0) / dec!(12) / dec!(100));
         let monthly_interest = monthly_interest_exact.round_dp(2);
         let expected_mortgage_balance = balance_after_payment + monthly_interest;
@@ -807,88 +808,16 @@ start_date: "2025-01-01"
             chrono::NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
         );
         
-        // Calculate expected interest: 500000 * (6% / 12 / 100) = 500000 * 0.005 = 2500
-        let expected_interest = dec!(500000.00) * (dec!(6.0) / dec!(12) / dec!(100));
-        assert_eq!(expected_interest, dec!(2500.00));
+        // Calculate expected interest: -500000 * (6% / 12 / 100) = 500000 * 0.005 = 2500
+        let expected_interest = dec!(-500000.00) * (dec!(6.0) / dec!(12) / dec!(100));
+        assert_eq!(expected_interest, -dec!(2500.00));
         
         // Mortgage balance should increase by interest
-        assert_eq!(next[MORTGAGE_ACCOUNT], dec!(500000.00) + expected_interest);
+        assert_eq!(next[MORTGAGE_ACCOUNT], dec!(-500000.00) + expected_interest);
         // Mortgage income should decrease by interest (negative income)
         assert_eq!(next[MORTGAGE_INCOME], dec!(0.00) - expected_interest);
     }
 
-    #[test]
-    fn test_mortgage_payment_limited_by_available_balance() {
-        let mut config = create_test_accounts(5);
-        // Set up a scenario where the mortgage payment exceeds the available balance
-        // We need to adjust both the main account and opening_balances to keep things balanced
-        let current_main = config.accounts.get(MAIN_ACCOUNT).unwrap().clone();
-        let new_main_balance = dec!(100.00); // Only £100 available
-        let difference = new_main_balance - current_main;
-        
-        config.accounts.insert(MAIN_ACCOUNT.to_string(), new_main_balance);
-        // Adjust opening_balances to maintain balance
-        let current_opening = config.accounts.get(OPENING_BALANCES).unwrap().clone();
-        config.accounts.insert(OPENING_BALANCES.to_string(), current_opening - difference);
-        
-        config.transactions[0] = Transaction::Mortgage {
-            deduction_amount: dec!(500.00), // Try to deduct £500
-            deduction_day: 5,
-            from: MAIN_ACCOUNT.to_string(),
-            to: MORTGAGE_ACCOUNT.to_string(),
-        };
-        
-        let next = compute_next_day_balances(
-            &config,
-            &config.accounts,
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
-        );
-        
-        // Should only deduct the available £100, leaving balance at zero
-        assert_eq!(next[MAIN_ACCOUNT], dec!(0.00));
-        // Mortgage account should only receive the actual deduction amount
-        let original_mortgage = config.accounts.get(MORTGAGE_ACCOUNT).unwrap();
-        // Also account for interest on the updated balance
-        let balance_after_payment = *original_mortgage + dec!(100.00);
-        let monthly_interest_exact = balance_after_payment * (dec!(5.0) / dec!(12) / dec!(100));
-        let monthly_interest = monthly_interest_exact.round_dp(2);
-        assert_eq!(next[MORTGAGE_ACCOUNT], balance_after_payment + monthly_interest);
-    }
-
-    #[test]
-    fn test_mortgage_payment_with_negative_balance() {
-        let mut config = create_test_accounts(5);
-        // Set up a scenario where the account already has a negative balance
-        let current_main = config.accounts.get(MAIN_ACCOUNT).unwrap().clone();
-        let new_main_balance = dec!(-50.00); // Negative balance
-        let difference = new_main_balance - current_main;
-        
-        config.accounts.insert(MAIN_ACCOUNT.to_string(), new_main_balance);
-        // Adjust opening_balances to maintain balance
-        let current_opening = config.accounts.get(OPENING_BALANCES).unwrap().clone();
-        config.accounts.insert(OPENING_BALANCES.to_string(), current_opening - difference);
-        
-        config.transactions[0] = Transaction::Mortgage {
-            deduction_amount: dec!(200.00),
-            deduction_day: 5,
-            from: MAIN_ACCOUNT.to_string(),
-            to: MORTGAGE_ACCOUNT.to_string(),
-        };
-        
-        let next = compute_next_day_balances(
-            &config,
-            &config.accounts,
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
-        );
-        
-        // Should not deduct anything when balance is already negative
-        assert_eq!(next[MAIN_ACCOUNT], dec!(-50.00)); // No change
-        // Mortgage account should not receive any payment, but will still get interest
-        let original_mortgage = config.accounts.get(MORTGAGE_ACCOUNT).unwrap();
-        let monthly_interest_exact = *original_mortgage * (dec!(5.0) / dec!(12) / dec!(100));
-        let monthly_interest = monthly_interest_exact.round_dp(2);
-        assert_eq!(next[MORTGAGE_ACCOUNT], *original_mortgage + monthly_interest);
-    }
 }
 
 
