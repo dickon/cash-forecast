@@ -31,8 +31,15 @@ enum Transaction {
         from: String,
         #[serde(default = "default_mortgage")]
         to: String,
-        #[serde(default = "default_interest_rate")]
-        interest_rate: Decimal,
+    },
+    #[serde(rename = "interest")]
+    Interest {
+        rate: Decimal,
+        day: u32,
+        #[serde(default = "default_mortgage")]
+        account: String,
+        #[serde(default = "default_mortgage_income")]
+        income_account: String,
     },
     #[serde(rename = "salary")]
     Salary {
@@ -68,8 +75,8 @@ fn default_mortgage() -> String {
     MORTGAGE_ACCOUNT.to_string()
 }
 
-fn default_interest_rate() -> Decimal {
-    Decimal::ZERO
+fn default_mortgage_income() -> String {
+    MORTGAGE_INCOME.to_string()
 }
 
 fn main() {
@@ -154,18 +161,20 @@ fn compute_next_day_balances(
     // For each transaction, apply its effect to the relevant accounts
     for transaction in &config.transactions {
         match transaction {
-            Transaction::Mortgage { deduction_amount, deduction_day, from, to, interest_rate } => {
+            Transaction::Mortgage { deduction_amount, deduction_day, from, to } => {
                 if date.day() == *deduction_day {
                     *new_balances.get_mut(from).expect("From account not found in balances") -= *deduction_amount;
                     *new_balances.get_mut(to).expect("To account not found in balances") += *deduction_amount;
-                    
-                    // Apply interest to mortgage balance (monthly interest)
-                    if *interest_rate > Decimal::ZERO {
-                        let current_mortgage_balance = *new_balances.get(to).unwrap();
-                        let monthly_interest = current_mortgage_balance * (*interest_rate / dec!(12) / dec!(100));
-                        *new_balances.get_mut(to).expect("To account not found for interest") += monthly_interest;
-                        *new_balances.get_mut(MORTGAGE_INCOME).expect("mortgage_income not found for interest") -= monthly_interest;
-                    }
+                }
+            }
+            Transaction::Interest { rate, day, account, income_account } => {
+                if date.day() == *day && *rate != Decimal::ZERO {
+                    let current_balance = *new_balances.get(account).unwrap();
+                    let monthly_interest_exact = current_balance * (*rate / dec!(12) / dec!(100));
+                    // round monthly interest to 2 decimal places
+                    let monthly_interest = monthly_interest_exact.round_dp(2);
+                    *new_balances.get_mut(account).expect("Account not found for interest") += monthly_interest;
+                    *new_balances.get_mut(income_account).expect("Income account not found for interest") -= monthly_interest;
                 }
             }
             Transaction::Salary { amount, day, to } => {
@@ -225,7 +234,12 @@ mod tests {
                     deduction_day: mortgage_deduction_day,
                     from: MAIN_ACCOUNT.to_string(),
                     to: MORTGAGE_ACCOUNT.to_string(),
-                    interest_rate: dec!(5.0), // 5% annual interest rate
+                },
+                Transaction::Interest {
+                    rate: dec!(5.0), // 5% annual interest rate
+                    day: mortgage_deduction_day,
+                    account: MORTGAGE_ACCOUNT.to_string(),
+                    income_account: MORTGAGE_INCOME.to_string(),
                 },
                 Transaction::Salary {
                     amount: dec!(2000.00),
@@ -246,7 +260,11 @@ transactions:
   - type: mortgage
     deduction_amount: 123.45
     deduction_day: 1
-    interest_rate: 5.0
+  - type: interest
+    rate: 5.0
+    day: 1
+    account: mortgage
+    income_account: mortgage_income
   - type: salary
     amount: 2000.00
     day: 6
@@ -421,12 +439,12 @@ start_date: "2025-01-01"
         let history = super::run(&config, balances, days);
         // Salary is paid on day 6, so check balance before and after
         // get the salary day from config
-        assert!(config.transactions.len() > 1, "Config should have at least two transactions");
-        assert!(matches!(config.transactions[1], Transaction::Salary { .. }), "Second transaction should be a Salary transaction");
-        let salary_day = if let Transaction::Salary { day, .. } = &config.transactions[1] {
+        assert!(config.transactions.len() > 2, "Config should have at least three transactions");
+        assert!(matches!(config.transactions[2], Transaction::Salary { .. }), "Third transaction should be a Salary transaction");
+        let salary_day = if let Transaction::Salary { day, .. } = &config.transactions[2] {
             *day
         } else {
-            panic!("Expected second transaction to be a Salary transaction");
+            panic!("Expected third transaction to be a Salary transaction");
         };
         assert_eq!(salary_day, 6, "Salary day should be 6");
         let before = &history[salary_day as usize - 3]; // day 5
@@ -470,15 +488,17 @@ start_date: "2025-01-01"
         let mut accounts = config.accounts.clone();
         accounts.insert(alt_account.to_string(), dec!(0.00));
         config.accounts = accounts;
-        config.transactions[1] = Transaction::Salary {
+        config.transactions[2] = Transaction::Salary {  // Fix: index 2 is the Salary transaction
             amount: dec!(2000.00),
             day: 6,
             to: alt_account.to_string(),
         };
+        
         let balances = config.accounts.clone();
         let days = 6;
         let history = super::run(&config, balances, days);
         let final_balances = &history.last().unwrap().1;
+        
         assert_eq!(final_balances[alt_account], dec!(2000.00));
         assert_eq!(final_balances[MAIN_ACCOUNT], dec!(10000.00) -dec!(123.45)); // mortgage deducted
     }
@@ -580,7 +600,6 @@ start_date: "2025-01-01"
             deduction_day: 7,
             from: MAIN_ACCOUNT.to_string(),
             to: MORTGAGE_ACCOUNT.to_string(),
-            interest_rate: dec!(5.0),
         };
         config.transactions[1] = Transaction::Salary {
             amount: dec!(2000.00),
@@ -633,6 +652,41 @@ start_date: "2025-01-01"
         } else {
             panic!("Expected Transfer transaction");
         }
+    }
+
+    #[test]
+    fn test_interest_calculation() {
+        let mut config = create_test_accounts(5); // Mortgage on day 5, salary on day 6
+        // Clear existing interest transaction and add a new one for day 10
+        config.transactions = vec![
+            Transaction::Mortgage {
+                deduction_amount: dec!(123.45),
+                deduction_day: 5,
+                from: MAIN_ACCOUNT.to_string(),
+                to: MORTGAGE_ACCOUNT.to_string(),
+            },
+            Transaction::Interest {
+                rate: dec!(6.0), // 6% annual rate
+                day: 10,
+                account: MORTGAGE_ACCOUNT.to_string(),
+                income_account: MORTGAGE_INCOME.to_string(),
+            },
+        ];
+        
+        let next = compute_next_day_balances(
+            &config,
+            &config.accounts,
+            chrono::NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
+        );
+        
+        // Calculate expected interest: 500000 * (6% / 12 / 100) = 500000 * 0.005 = 2500
+        let expected_interest = dec!(500000.00) * (dec!(6.0) / dec!(12) / dec!(100));
+        assert_eq!(expected_interest, dec!(2500.00));
+        
+        // Mortgage balance should increase by interest
+        assert_eq!(next[MORTGAGE_ACCOUNT], dec!(500000.00) + expected_interest);
+        // Mortgage income should decrease by interest (negative income)
+        assert_eq!(next[MORTGAGE_INCOME], dec!(0.00) - expected_interest);
     }
 }
 
