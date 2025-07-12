@@ -167,8 +167,15 @@ fn compute_next_day_balances(
         match transaction {
             Transaction::Mortgage { deduction_amount, deduction_day, from, to } => {
                 if date.day() == *deduction_day {
+                    // We represent mortgage accounts as negative balances.
+                    // We will do a partial deduction if the full deduction would result in the mortage account going positive
+                    // Claude Sonnet 4 does not understand this and is gaslighting me, convinced that we should instead be checking 
+                    // the source account has enough money. LOL. I mean I could model going into arrears in the mortgage by underpaying when
+                    // overdrawn, but I don't want to do that right now.
+
                     let to_balance = *new_balances.get(to).expect("mortgage (to) account not found in balances");
-                    // Only deduct at most what's left to pay in the mortgage account (prevent going above zreo)
+                    assert!(to_balance <= Decimal::ZERO, "Mortgage account balance must be zero or negative before deduction; is {to_balance}");
+                    // Only deduct at most what's left to pay in the mortgage account (prevent going above zreo)                
                     let actual_deduction = (*deduction_amount).min(-to_balance);
                     assert!(actual_deduction <= *deduction_amount);
                     assert!(actual_deduction >= Decimal::ZERO, "Mortgage deduction amount must be non-negative; is {actual_deduction}");
