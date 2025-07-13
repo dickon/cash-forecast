@@ -41,6 +41,7 @@ enum Generator {
         account: String,
         #[serde(default = "default_mortgage_income")]
         income_account: String,
+        month: Option<u32>,
     },
     #[serde(rename = "salary")]
     Salary {
@@ -199,8 +200,13 @@ fn compute_next_day_balances(
                     *new_balances.get_mut(to).expect("To account not found in balances") += actual_deduction;
                 }
             }
-            Generator::Interest { rate, day, account, income_account } => {
-                if date.day() == *day && *rate != Decimal::ZERO {
+            Generator::Interest { rate, day, account, income_account, month } => {
+                let should_pay_interest = match month {
+                    Some(specific_month) => date.day() == *day && date.month() == *specific_month,
+                    None => date.day() == *day, // Monthly payment
+                };
+                
+                if should_pay_interest && *rate != Decimal::ZERO {
                     let current_balance = *new_balances.get(account).unwrap();
                     let monthly_interest_exact = current_balance * (*rate / dec!(12) / dec!(100));
                     // round monthly interest to 2 decimal places
@@ -398,6 +404,7 @@ mod tests {
                     day: mortgage_deduction_day,
                     account: MORTGAGE_ACCOUNT.to_string(),
                     income_account: MORTGAGE_INCOME.to_string(),
+                    month: None, // Monthly interest
                 },
                 Generator::Salary {
                     amount: dec!(2000.00),
@@ -840,6 +847,7 @@ start_date: "2025-01-01"
                 day: 10,
                 account: MORTGAGE_ACCOUNT.to_string(),
                 income_account: MORTGAGE_INCOME.to_string(),
+                month: None, // Monthly interest
             },
         ];
         
