@@ -1,4 +1,4 @@
-use chrono::Datelike;
+use chrono::{Datelike, Month};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use serde::Deserialize;
@@ -41,7 +41,8 @@ enum Generator {
         account: String,
         #[serde(default = "default_mortgage_income")]
         income_account: String,
-        month: Option<u32>,
+        // Month interest is paid annually, or if None then interest is paid monthly
+        month: Option<Month>,
     },
     #[serde(rename = "salary")]
     Salary {
@@ -202,7 +203,7 @@ fn compute_next_day_balances(
             }
             Generator::Interest { rate, day, account, income_account, month } => {
                 let should_pay_interest = match month {
-                    Some(specific_month) => date.day() == *day && date.month() == *specific_month,
+                    Some(specific_month) => date.day() == *day && Month::try_from(date.month() as u8).unwrap() == *specific_month,
                     None => date.day() == *day, // Monthly payment
                 };
                 
