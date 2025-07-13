@@ -1186,6 +1186,96 @@ start_date: "2025-01-01"
         assert_eq!(day_10_balances[CHARITY_EXPENDITURE], expected_tithe);
         assert_eq!(day_10_balances[MAIN_ACCOUNT], dec!(10000.00) + dec!(2000.00) - expected_tithe);
     }
+
+    #[test]
+    fn test_annual_interest_with_deposits_during_year() {
+        // Create a savings account with an initial balance
+        let savings_account = "savings_account";
+        let accounts = HashMap::from([
+            (MAIN_ACCOUNT.to_string(), dec!(50000.00)),
+            (savings_account.to_string(), dec!(10000.00)), // Initial savings balance
+        ]);
+        let accounts_with_defaults = super::add_default_accounts(&accounts);
+        let accounts_with_opening = add_opening_balances(&accounts_with_defaults);
+        
+        let mut config = Config {
+            generators: vec![
+                // Transfer money into savings account during the year (March 1st)
+                Generator::Transfer {
+                    amount: dec!(5000.00),
+                    day: 1,
+                    from: MAIN_ACCOUNT.to_string(),
+                    to: savings_account.to_string(),
+                },
+                // Annual interest paid on June 30th at 4% rate
+                Generator::Interest {
+                    rate: dec!(4.0), // 4% annual rate
+                    day: 30,
+                    account: savings_account.to_string(),
+                    income_account: "interest_income".to_string(),
+                    month: Some(chrono::Month::June), // Annual interest paid in June
+                },
+            ],
+            accounts: accounts_with_opening,
+            currency_symbol: "£".to_string(),
+            start_date: chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        };
+        
+        // Add the interest income account
+        config.accounts.insert("interest_income".to_string(), dec!(0.00));
+        
+        // Test before the deposit (February)
+        let (balances_feb, _) = compute_next_day_balances(
+            &config,
+            &config.accounts,
+            chrono::NaiveDate::from_ymd_opt(2025, 2, 15).unwrap(),
+            Decimal::ZERO,
+        );
+        
+        // Should still have original balance
+        assert_eq!(balances_feb[savings_account], dec!(10000.00));
+        
+        // Test after the deposit (March 1st)
+        let (balances_mar, _) = compute_next_day_balances(
+            &config,
+            &balances_feb,
+            chrono::NaiveDate::from_ymd_opt(2025, 3, 1).unwrap(),
+            Decimal::ZERO,
+        );
+        
+        // Should have original balance plus deposit
+        assert_eq!(balances_mar[savings_account], dec!(15000.00));
+        
+        // Test annual interest payment on June 30th - should be calculated on the current balance
+        let (balances_jun, _) = compute_next_day_balances(
+            &config,
+            &balances_mar,
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 30).unwrap(),
+            Decimal::ZERO,
+        );
+        
+        let expected_interest = dec!(15000.00) * (dec!(4.0) / dec!(100)) * dec!(10) / dec!(12) +
+            dec!(10000) * dec!(4.0) * dec!(2) / dec!(12) / dec!(100);
+        let expected_interest_pence = expected_interest.round_dp(2);
+        assert_eq!(expected_interest_pence, dec!(566.67));
+        
+        // Savings balance should increase by interest
+        assert_eq!(balances_jun[savings_account], dec!(15000.00) + expected_interest);
+        
+        // Interest income account should receive the interest (as negative since it's income)
+        assert_eq!(balances_jun["interest_income"], -expected_interest);
+        
+        // Test that no interest is paid in other months (e.g., July)
+        let (balances_jul, _) = compute_next_day_balances(
+            &config,
+            &balances_jun,
+            chrono::NaiveDate::from_ymd_opt(2025, 7, 30).unwrap(),
+            Decimal::ZERO,
+        );
+        
+        // Savings balance should remain unchanged in July
+        assert_eq!(balances_jul[savings_account], dec!(15000.00) + expected_interest);
+    }
 }
 
 
