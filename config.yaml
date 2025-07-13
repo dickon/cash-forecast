@@ -1,5 +1,5 @@
 start_date: "2025-01-01"
-transactions:
+generators:
   - type: mortgage
     deduction_amount: 123.45
     deduction_day: 1

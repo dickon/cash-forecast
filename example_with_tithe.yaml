@@ -1,0 +1,31 @@
+generators:
+  - type: salary
+    amount: 2000.00
+    day: 6
+    to: main
+  - type: salary
+    amount: 1500.00  
+    day: 21
+    to: main
+  - type: tithe
+    percentage: 10.0
+    day: 15
+    from: main
+    to: charity_expenditure
+  - type: mortgage
+    deduction_amount: 500.00
+    deduction_day: 1
+    from: main
+    to: mortgage
+  - type: interest
+    rate: 5.0
+    day: 1
+    account: mortgage
+    income_account: mortgage_income
+
+accounts:
+  main: 5000.00
+  mortgage: -200000.00
+
+currency_symbol: "£"
+start_date: "2025-01-01"
