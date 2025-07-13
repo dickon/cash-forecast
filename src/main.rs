@@ -142,7 +142,7 @@ fn run(
 
     for _ in 0..days_to_run {
         date = date + chrono::Duration::days(1);
-        let (new_balances, new_total_salary) = compute_next_day_balances_with_tithe(config, &balances, date, total_salary_since_last_tithe);
+        let (new_balances, new_total_salary) = compute_next_day_balances(config, &balances, date, total_salary_since_last_tithe);
         balances = new_balances;
         total_salary_since_last_tithe = new_total_salary;
         history.push((date, balances.clone()));
@@ -175,7 +175,7 @@ fn add_default_accounts(
     new_balances
 }
 
-fn compute_next_day_balances_with_tithe(
+fn compute_next_day_balances(
     config: &Config,
     balances: &std::collections::HashMap<String, Decimal>,
     date: chrono::NaiveDate,
@@ -463,7 +463,7 @@ start_date: "2025-01-01"
 
     fn make_accounts_for_day(mortgage_deduction_day: u32, test_day: u32) -> HashMap<String, Decimal> {
         let config = create_test_accounts(mortgage_deduction_day);
-        let (next, _) = compute_next_day_balances_with_tithe(
+        let (next, _) = compute_next_day_balances(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, test_day).unwrap(),
@@ -492,7 +492,7 @@ start_date: "2025-01-01"
             day: 7,
             to: MAIN_ACCOUNT.to_string()
         });
-        let (next, _) = compute_next_day_balances_with_tithe(
+        let (next, _) = compute_next_day_balances(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 7).unwrap(),
@@ -509,7 +509,7 @@ start_date: "2025-01-01"
             day: 15,
             to: MAIN_ACCOUNT.to_string()
         });
-        let (next, _) = compute_next_day_balances_with_tithe(
+        let (next, _) = compute_next_day_balances(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 15).unwrap(),
@@ -685,7 +685,7 @@ start_date: "2025-01-01"
             to: savings_account.to_string(),
         });
         
-        let (next, _) = compute_next_day_balances_with_tithe(
+        let (next, _) = compute_next_day_balances(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
@@ -709,7 +709,7 @@ start_date: "2025-01-01"
             to: savings_account.to_string(),
         });
         
-        let (next, _) = compute_next_day_balances_with_tithe(
+        let (next, _) = compute_next_day_balances(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(), // Not transfer day
@@ -744,7 +744,7 @@ start_date: "2025-01-01"
             to: investment_account.to_string(),
         });
         
-        let (next, _) = compute_next_day_balances_with_tithe(
+        let (next, _) = compute_next_day_balances(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
@@ -784,7 +784,7 @@ start_date: "2025-01-01"
             to: savings_account.to_string(),
         });
         
-        let (next, _) = compute_next_day_balances_with_tithe(
+        let (next, _) = compute_next_day_balances(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 7).unwrap(),
@@ -843,7 +843,7 @@ start_date: "2025-01-01"
             },
         ];
         
-        let (next, _) = compute_next_day_balances_with_tithe(
+        let (next, _) = compute_next_day_balances(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
@@ -870,7 +870,7 @@ start_date: "2025-01-01"
             to: MORTGAGE_ACCOUNT.to_string(),
         };
         
-        let (next, _) = compute_next_day_balances_with_tithe(
+        let (next, _) = compute_next_day_balances(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
@@ -896,7 +896,7 @@ start_date: "2025-01-01"
             to: MORTGAGE_ACCOUNT.to_string(),
         };
         
-        let (next, _) = compute_next_day_balances_with_tithe(
+        let (next, _) = compute_next_day_balances(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
