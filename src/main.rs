@@ -9,6 +9,7 @@ const SALARY_INCOME: &str = "salary_income";
 const MORTGAGE_INCOME: &str = "mortgage_income";
 const MORTGAGE_ACCOUNT: &str = "mortgage";
 const OPENING_BALANCES: &str = "opening_balances";
+const CHARITY_EXPENDITURE: &str = "charity_expenditure";
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
@@ -57,6 +58,15 @@ enum Transaction {
         #[serde(default = "default_main")]
         to: String,
     },
+    #[serde(rename = "tithe")]
+    Tithe {
+        percentage: Decimal,
+        day: u32,
+        #[serde(default = "default_main")]
+        from: String,
+        #[serde(default = "default_charity")]
+        to: String,
+    },
 }
 
 fn default_currency_symbol() -> String {
@@ -77,6 +87,10 @@ fn default_mortgage() -> String {
 
 fn default_mortgage_income() -> String {
     MORTGAGE_INCOME.to_string()
+}
+
+fn default_charity() -> String {
+    CHARITY_EXPENDITURE.to_string()
 }
 
 fn main() {
@@ -124,10 +138,13 @@ fn run(
     let mut balances = balances;
     let mut date: chrono::NaiveDate = config.start_date;
     let mut history = Vec::new();
+    let mut total_salary_since_last_tithe = Decimal::ZERO;
 
     for _ in 0..days_to_run {
         date = date + chrono::Duration::days(1);
-        balances = compute_next_day_balances(config, &balances, date);
+        let (new_balances, new_total_salary) = compute_next_day_balances_with_tithe(config, &balances, date, total_salary_since_last_tithe);
+        balances = new_balances;
+        total_salary_since_last_tithe = new_total_salary;
         history.push((date, balances.clone()));
     }
     history
@@ -152,15 +169,20 @@ fn add_default_accounts(
     if !new_balances.contains_key(MORTGAGE_INCOME) {
         new_balances.insert(MORTGAGE_INCOME.to_string(), Decimal::ZERO);
     }
+    if !new_balances.contains_key(CHARITY_EXPENDITURE) {
+        new_balances.insert(CHARITY_EXPENDITURE.to_string(), Decimal::ZERO);
+    }
     new_balances
 }
 
-fn compute_next_day_balances(
+fn compute_next_day_balances_with_tithe(
     config: &Config,
     balances: &std::collections::HashMap<String, Decimal>,
     date: chrono::NaiveDate,
-) -> std::collections::HashMap<String, Decimal> {
+    total_salary_since_last_tithe: Decimal,
+) -> (std::collections::HashMap<String, Decimal>, Decimal) {
     let mut new_balances = balances.clone();
+    let mut salary_accumulator = total_salary_since_last_tithe;
 
     // For each transaction, apply its effect to the relevant accounts
     for transaction in &config.transactions {
@@ -191,12 +213,26 @@ fn compute_next_day_balances(
                 if date.day() == *day {
                     *new_balances.get_mut(to).expect("Salary 'to' account not found") += *amount;
                     *new_balances.get_mut(SALARY_INCOME).expect("salary_income not found for salary") -= *amount;
+                    // Accumulate salary for tithe calculation
+                    salary_accumulator += *amount;
                 }
             }
             Transaction::Transfer { amount, day, from, to } => {
                 if date.day() == *day {
                     *new_balances.get_mut(from).expect("Transfer 'from' account not found") -= *amount;
                     *new_balances.get_mut(to).expect("Transfer 'to' account not found") += *amount;
+                }
+            }
+            Transaction::Tithe { percentage, day, from, to } => {
+                if date.day() == *day {
+                    // Calculate tithe amount as percentage of accumulated salary
+                    let tithe_amount = (salary_accumulator * *percentage / dec!(100)).round_dp(2);
+                    if tithe_amount > Decimal::ZERO {
+                        *new_balances.get_mut(from).expect("Tithe 'from' account not found") -= tithe_amount;
+                        *new_balances.get_mut(to).expect("Tithe 'to' account not found") += tithe_amount;
+                        // Reset salary accumulator after tithe is paid
+                        salary_accumulator = Decimal::ZERO;
+                    }
                 }
             }
         }
@@ -211,6 +247,15 @@ fn compute_next_day_balances(
         }
         panic!("Error: Balances do not sum to zero on {date}: {total_balance}");
     }
+    (new_balances, salary_accumulator)
+}
+
+fn compute_next_day_balances(
+    config: &Config,
+    balances: &std::collections::HashMap<String, Decimal>,
+    date: chrono::NaiveDate,
+) -> std::collections::HashMap<String, Decimal> {
+    let (new_balances, _) = compute_next_day_balances_with_tithe(config, balances, date, Decimal::ZERO);
     new_balances
 }
 
@@ -863,6 +908,209 @@ start_date: "2025-01-01"
         let interest = (dec!(-500000.00) * (dec!(5.0) / dec!(12) / dec!(100))).round_dp(2);
         assert_eq!(next[MORTGAGE_ACCOUNT], *original_mortgage + interest);
 
+    }
+
+    #[test]
+    fn test_tithe_calculation_basic() {
+        let mut config = create_test_accounts(15); // No mortgage/salary on test day
+        
+        // Add tithe transaction
+        config.transactions.push(Transaction::Tithe {
+            percentage: dec!(10.0), // 10% tithe
+            day: 10,
+            from: MAIN_ACCOUNT.to_string(),
+            to: CHARITY_EXPENDITURE.to_string(),
+        });
+        
+        // Simulate running for 10 days with salary accumulation
+        let balances = config.accounts.clone();
+        let history = super::run(&config, balances, 10);
+        
+        // Get balances on day 10 (when tithe is paid)
+        let day_10_balances = &history[9].1; // 0-indexed, so day 10 is index 9
+        
+        // Salary should be paid on day 6, so by day 10 we should have one salary payment
+        // Tithe should be 10% of £2000 = £200
+        let expected_tithe = dec!(2000.00) * dec!(10.0) / dec!(100);
+        assert_eq!(expected_tithe, dec!(200.00));
+        
+        // Main account should have: initial + salary - tithe
+        assert_eq!(day_10_balances[MAIN_ACCOUNT], dec!(10000.00) + dec!(2000.00) - expected_tithe);
+        
+        // Charity account should have the tithe amount
+        assert_eq!(day_10_balances[CHARITY_EXPENDITURE], expected_tithe);
+    }
+
+    #[test]
+    fn test_tithe_multiple_salaries() {
+        // Create a simple config without mortgage/interest transactions to avoid conflicts
+        let accounts = HashMap::from([
+            (MAIN_ACCOUNT.to_string(), dec!(10000.00)),
+        ]);
+        let accounts_with_defaults = super::add_default_accounts(&accounts);
+        let accounts_with_opening = add_opening_balances(&accounts_with_defaults);
+        
+        let config = Config {
+            transactions: vec![
+                Transaction::Salary {
+                    amount: dec!(2000.00),
+                    day: 6,
+                    to: MAIN_ACCOUNT.to_string(),
+                },
+                Transaction::Salary {
+                    amount: dec!(1500.00),
+                    day: 15,
+                    to: MAIN_ACCOUNT.to_string(),
+                },
+                Transaction::Tithe {
+                    percentage: dec!(10.0), // 10% tithe
+                    day: 20,
+                    from: MAIN_ACCOUNT.to_string(),
+                    to: CHARITY_EXPENDITURE.to_string(),
+                },
+            ],
+            accounts: accounts_with_opening,
+            currency_symbol: "£".to_string(),
+            start_date: chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+        };
+        
+        let balances = config.accounts.clone();
+        let history = super::run(&config, balances, 20);
+        
+        // Get balances on day 20
+        let day_20_balances = &history[19].1;
+        
+        // Total salary: £2000 (day 6) + £1500 (day 15) = £3500
+        // Tithe: 10% of £3500 = £350
+        let total_salary = dec!(2000.00) + dec!(1500.00);
+        let expected_tithe = total_salary * dec!(10.0) / dec!(100);
+        assert_eq!(expected_tithe, dec!(350.00));
+        
+        // Main account should have: initial + total_salary - tithe
+        assert_eq!(day_20_balances[MAIN_ACCOUNT], dec!(10000.00) + total_salary - expected_tithe);
+        
+        // Charity account should have the tithe amount
+        assert_eq!(day_20_balances[CHARITY_EXPENDITURE], expected_tithe);
+    }
+
+    #[test]
+    fn test_tithe_resets_salary_accumulator() {
+        let mut config = create_test_accounts(30);
+        
+        // Add multiple tithe transactions
+        config.transactions.push(Transaction::Tithe {
+            percentage: dec!(10.0),
+            day: 10,
+            from: MAIN_ACCOUNT.to_string(),
+            to: CHARITY_EXPENDITURE.to_string(),
+        });
+        
+        config.transactions.push(Transaction::Salary {
+            amount: dec!(1000.00),
+            day: 15,
+            to: MAIN_ACCOUNT.to_string(),
+        });
+        
+        config.transactions.push(Transaction::Tithe {
+            percentage: dec!(10.0),
+            day: 20,
+            from: MAIN_ACCOUNT.to_string(),
+            to: CHARITY_EXPENDITURE.to_string(),
+        });
+        
+        let balances = config.accounts.clone();
+        let history = super::run(&config, balances, 20);
+        
+        // Check day 10 - should tithe on first salary only (£2000 from day 6)
+        let day_10_balances = &history[9].1;
+        let first_tithe = dec!(2000.00) * dec!(10.0) / dec!(100);
+        assert_eq!(day_10_balances[CHARITY_EXPENDITURE], first_tithe);
+        
+        // Check day 20 - should tithe only on salary from day 15 (£1000)
+        let day_20_balances = &history[19].1;
+        let second_tithe = dec!(1000.00) * dec!(10.0) / dec!(100);
+        let total_tithe = first_tithe + second_tithe;
+        assert_eq!(day_20_balances[CHARITY_EXPENDITURE], total_tithe);
+        
+        // Main account should reflect both tithes
+        assert_eq!(day_20_balances[MAIN_ACCOUNT], 
+                   dec!(10000.00) + dec!(2000.00) + dec!(1000.00) - total_tithe);
+    }
+
+    #[test]
+    fn test_tithe_with_zero_salary() {
+        let mut config = create_test_accounts(20); // No salary on tithe day
+        
+        // Remove the default salary transaction
+        config.transactions = vec![
+            Transaction::Tithe {
+                percentage: dec!(10.0),
+                day: 10,
+                from: MAIN_ACCOUNT.to_string(),
+                to: CHARITY_EXPENDITURE.to_string(),
+            }
+        ];
+        
+        let balances = config.accounts.clone();
+        let history = super::run(&config, balances, 10);
+        
+        // Get balances on day 10
+        let day_10_balances = &history[9].1;
+        
+        // No salary, so no tithe should be paid
+        assert_eq!(day_10_balances[CHARITY_EXPENDITURE], dec!(0.00));
+        assert_eq!(day_10_balances[MAIN_ACCOUNT], dec!(10000.00)); // No change
+    }
+
+    #[test]
+    fn test_config_parsing_with_tithe() {
+        let yaml = r#"
+transactions:
+  - type: tithe
+    percentage: 10.0
+    day: 15
+    from: main
+    to: charity_expenditure
+accounts:
+  main: 5000.00
+currency_symbol: "£"
+start_date: "2025-01-01"
+"#;
+        let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
+        assert_eq!(config.transactions.len(), 1);
+        
+        if let Transaction::Tithe { percentage, day, from, to } = &config.transactions[0] {
+            assert_eq!(*percentage, dec!(10.0));
+            assert_eq!(*day, 15);
+            assert_eq!(from, "main");
+            assert_eq!(to, "charity_expenditure");
+        } else {
+            panic!("Expected Tithe transaction");
+        }
+    }
+
+    #[test]
+    fn test_tithe_with_different_percentage() {
+        let mut config = create_test_accounts(15);
+        
+        config.transactions.push(Transaction::Tithe {
+            percentage: dec!(5.0), // 5% tithe
+            day: 10,
+            from: MAIN_ACCOUNT.to_string(),
+            to: CHARITY_EXPENDITURE.to_string(),
+        });
+        
+        let balances = config.accounts.clone();
+        let history = super::run(&config, balances, 10);
+        
+        let day_10_balances = &history[9].1;
+        
+        // Tithe should be 5% of £2000 = £100
+        let expected_tithe = dec!(2000.00) * dec!(5.0) / dec!(100);
+        assert_eq!(expected_tithe, dec!(100.00));
+        
+        assert_eq!(day_10_balances[CHARITY_EXPENDITURE], expected_tithe);
+        assert_eq!(day_10_balances[MAIN_ACCOUNT], dec!(10000.00) + dec!(2000.00) - expected_tithe);
     }
 }
 
