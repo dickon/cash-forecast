@@ -209,11 +209,14 @@ fn compute_next_day_balances(
                 
                 if should_pay_interest && *rate != Decimal::ZERO {
                     let current_balance = *new_balances.get(account).unwrap();
-                    let monthly_interest_exact = current_balance * (*rate / dec!(12) / dec!(100));
-                    // round monthly interest to 2 decimal places
-                    let monthly_interest = monthly_interest_exact.round_dp(2);
-                    *new_balances.get_mut(account).expect("Account not found for interest") += monthly_interest;
-                    *new_balances.get_mut(income_account).expect("Income account not found for interest") -= monthly_interest;
+                    let interest_exact = match month {
+                        Some(_) => current_balance * (*rate / dec!(100)), // Annual interest
+                        None => current_balance * (*rate / dec!(12) / dec!(100)), // Monthly interest
+                    };
+                    // round interest to 2 decimal places
+                    let interest = interest_exact.round_dp(2);
+                    *new_balances.get_mut(account).expect("Account not found for interest") += interest;
+                    *new_balances.get_mut(income_account).expect("Income account not found for interest") -= interest;
                 }
             }
             Generator::Salary { amount, day, to } => {
