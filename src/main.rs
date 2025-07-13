@@ -869,6 +869,65 @@ start_date: "2025-01-01"
     }
 
     #[test]
+    fn test_interest_calculation_annual() {
+        let mut config = create_test_accounts(5); // Mortgage on day 5, salary on day 6
+        // Clear existing interest transaction and add a new one for annual interest in January
+        config.generators = vec![
+            Generator::Mortgage {
+                deduction_amount: dec!(123.45),
+                deduction_day: 5,
+                from: MAIN_ACCOUNT.to_string(),
+                to: MORTGAGE_ACCOUNT.to_string(),
+            },
+            Generator::Interest {
+                rate: dec!(6.0), // 6% annual rate
+                day: 15,
+                account: MORTGAGE_ACCOUNT.to_string(),
+                income_account: MORTGAGE_INCOME.to_string(),
+                month: Some(chrono::Month::January), // Annual interest paid in January
+            },
+        ];
+        
+        // Test that interest is paid in January
+        let (next_jan, _) = compute_next_day_balances(
+            &config,
+            &config.accounts,
+            chrono::NaiveDate::from_ymd_opt(2025, 1, 15).unwrap(), // January 15th
+            Decimal::ZERO,
+        );
+        
+        // Calculate expected interest: 500000 * (6% / 100) = 500000 * 0.005 = 2500
+        // Note: Still using monthly calculation even for annual payment
+        let expected_interest = dec!(-500000.00) * (dec!(6.0) / dec!(100));
+        assert_eq!(expected_interest, dec!(-30000.00));
+        
+        // Mortgage balance should increase by interest in January
+        assert_eq!(next_jan[MORTGAGE_ACCOUNT], dec!(-500000.00) + expected_interest);
+        
+        // Test that interest is NOT paid in February on the same day
+        let (next_feb, _) = compute_next_day_balances(
+            &config,
+            &config.accounts,
+            chrono::NaiveDate::from_ymd_opt(2025, 2, 15).unwrap(), // February 15th
+            Decimal::ZERO,
+        );
+        
+        // Mortgage balance should remain unchanged in February
+        assert_eq!(next_feb[MORTGAGE_ACCOUNT], dec!(-500000.00)); // No interest added
+        
+        // Test that interest is NOT paid in March on the same day
+        let (next_mar, _) = compute_next_day_balances(
+            &config,
+            &config.accounts,
+            chrono::NaiveDate::from_ymd_opt(2025, 3, 15).unwrap(), // March 15th
+            Decimal::ZERO,
+        );
+        
+        // Mortgage balance should remain unchanged in March
+        assert_eq!(next_mar[MORTGAGE_ACCOUNT], dec!(-500000.00)); // No interest added
+    }
+
+    #[test]
     fn test_mortgage_payment_limited_by_available_balance() {
         let mut config = create_test_accounts_with_main_balance(5, Some(dec!(100.0)));
         // Set up a scenario where the mortgage payment exceeds the available balance
