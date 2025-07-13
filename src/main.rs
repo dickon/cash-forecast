@@ -13,7 +13,7 @@ const CHARITY_EXPENDITURE: &str = "charity_expenditure";
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
-    transactions: Vec<Transaction>,
+    transactions: Vec<Generator>,
     accounts: std::collections::HashMap<String, Decimal>,
     #[serde(default = "default_currency_symbol")]
     currency_symbol: String,
@@ -23,7 +23,7 @@ struct Config {
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "lowercase")]
-enum Transaction {
+enum Generator {
     #[serde(rename = "mortgage")]
     Mortgage {
         deduction_amount: Decimal,
@@ -187,7 +187,7 @@ fn compute_next_day_balances_with_tithe(
     // For each transaction, apply its effect to the relevant accounts
     for transaction in &config.transactions {
         match transaction {
-            Transaction::Mortgage { deduction_amount, deduction_day, from, to } => {
+            Generator::Mortgage { deduction_amount, deduction_day, from, to } => {
                 if date.day() == *deduction_day {
                     let from_balance = *new_balances.get(from).expect("From account not found in balances");
                     let to_balance = *new_balances.get(to).expect("to account not found in balances");
@@ -199,7 +199,7 @@ fn compute_next_day_balances_with_tithe(
                     *new_balances.get_mut(to).expect("To account not found in balances") += actual_deduction;
                 }
             }
-            Transaction::Interest { rate, day, account, income_account } => {
+            Generator::Interest { rate, day, account, income_account } => {
                 if date.day() == *day && *rate != Decimal::ZERO {
                     let current_balance = *new_balances.get(account).unwrap();
                     let monthly_interest_exact = current_balance * (*rate / dec!(12) / dec!(100));
@@ -209,7 +209,7 @@ fn compute_next_day_balances_with_tithe(
                     *new_balances.get_mut(income_account).expect("Income account not found for interest") -= monthly_interest;
                 }
             }
-            Transaction::Salary { amount, day, to } => {
+            Generator::Salary { amount, day, to } => {
                 if date.day() == *day {
                     *new_balances.get_mut(to).expect("Salary 'to' account not found") += *amount;
                     *new_balances.get_mut(SALARY_INCOME).expect("salary_income not found for salary") -= *amount;
@@ -217,13 +217,13 @@ fn compute_next_day_balances_with_tithe(
                     salary_accumulator += *amount;
                 }
             }
-            Transaction::Transfer { amount, day, from, to } => {
+            Generator::Transfer { amount, day, from, to } => {
                 if date.day() == *day {
                     *new_balances.get_mut(from).expect("Transfer 'from' account not found") -= *amount;
                     *new_balances.get_mut(to).expect("Transfer 'to' account not found") += *amount;
                 }
             }
-            Transaction::Tithe { percentage, day, from, to } => {
+            Generator::Tithe { percentage, day, from, to } => {
                 if date.day() == *day {
                     // Calculate tithe amount as percentage of accumulated salary
                     let tithe_amount = (salary_accumulator * *percentage / dec!(100)).round_dp(2);
@@ -394,19 +394,19 @@ mod tests {
         let accounts_with_opening = add_opening_balances(&accounts_with_defaults);
         Config {
             transactions: vec![
-                Transaction::Mortgage {
+                Generator::Mortgage {
                     deduction_amount: dec!(123.45),
                     deduction_day: mortgage_deduction_day,
                     from: MAIN_ACCOUNT.to_string(),
                     to: MORTGAGE_ACCOUNT.to_string(),
                 },
-                Transaction::Interest {
+                Generator::Interest {
                     rate: dec!(5.0), // 5% annual interest rate
                     day: mortgage_deduction_day,
                     account: MORTGAGE_ACCOUNT.to_string(),
                     income_account: MORTGAGE_INCOME.to_string(),
                 },
-                Transaction::Salary {
+                Generator::Salary {
                     amount: dec!(2000.00),
                     day: 6,
                     to: MAIN_ACCOUNT.to_string()
@@ -493,7 +493,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_with_salary_and_mortgage_same_day() {
         let mut config = create_test_accounts(7);
-        config.transactions.push(Transaction::Salary {
+        config.transactions.push(Generator::Salary {
             amount: dec!(1500.00),
             day: 7,
             to: MAIN_ACCOUNT.to_string()
@@ -509,7 +509,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_compute_next_day_balances_with_salary_not_on_salary_day() {
         let mut config = create_test_accounts(10);
-        config.transactions.push(Transaction::Salary {
+        config.transactions.push(Generator::Salary {
             amount: dec!(1000.00),
             day: 15,
             to: MAIN_ACCOUNT.to_string()
@@ -610,8 +610,8 @@ start_date: "2025-01-01"
         // Salary is paid on day 6, so check balance before and after
         // get the salary day from config
         assert!(config.transactions.len() > 2, "Config should have at least three transactions");
-        assert!(matches!(config.transactions[2], Transaction::Salary { .. }), "Third transaction should be a Salary transaction");
-        let salary_day = if let Transaction::Salary { day, .. } = &config.transactions[2] {
+        assert!(matches!(config.transactions[2], Generator::Salary { .. }), "Third transaction should be a Salary transaction");
+        let salary_day = if let Generator::Salary { day, .. } = &config.transactions[2] {
             *day
         } else {
             panic!("Expected third transaction to be a Salary transaction");
@@ -637,7 +637,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_run_multiple_transactions_same_day() {
         let mut config = create_test_accounts(3);
-        config.transactions.push(Transaction::Salary {
+        config.transactions.push(Generator::Salary {
             amount: dec!(500.00),
             day: 3,
             to: MAIN_ACCOUNT.to_string(),
@@ -658,7 +658,7 @@ start_date: "2025-01-01"
         let mut accounts = config.accounts.clone();
         accounts.insert(alt_account.to_string(), dec!(0.00));
         config.accounts = accounts;
-        config.transactions[2] = Transaction::Salary {  // Fix: index 2 is the Salary transaction
+        config.transactions[2] = Generator::Salary {  // Fix: index 2 is the Salary transaction
             amount: dec!(2000.00),
             day: 6,
             to: alt_account.to_string(),
@@ -682,7 +682,7 @@ start_date: "2025-01-01"
         config.accounts.insert(savings_account.to_string(), dec!(0.00));
         
         // Add transfer transaction
-        config.transactions.push(Transaction::Transfer {
+        config.transactions.push(Generator::Transfer {
             amount: dec!(500.00),
             day: 5,
             from: MAIN_ACCOUNT.to_string(),
@@ -705,7 +705,7 @@ start_date: "2025-01-01"
         let savings_account = "savings";
         
         config.accounts.insert(savings_account.to_string(), dec!(0.00));
-        config.transactions.push(Transaction::Transfer {
+        config.transactions.push(Generator::Transfer {
             amount: dec!(500.00),
             day: 7,
             from: MAIN_ACCOUNT.to_string(),
@@ -732,14 +732,14 @@ start_date: "2025-01-01"
         config.accounts.insert(savings_account.to_string(), dec!(0.00));
         config.accounts.insert(investment_account.to_string(), dec!(0.00));
         
-        config.transactions.push(Transaction::Transfer {
+        config.transactions.push(Generator::Transfer {
             amount: dec!(300.00),
             day: 5,
             from: MAIN_ACCOUNT.to_string(),
             to: savings_account.to_string(),
         });
         
-        config.transactions.push(Transaction::Transfer {
+        config.transactions.push(Generator::Transfer {
             amount: dec!(200.00),
             day: 5,
             from: MAIN_ACCOUNT.to_string(),
@@ -765,20 +765,20 @@ start_date: "2025-01-01"
         config.accounts.insert(savings_account.to_string(), dec!(0.00));
         
         // Change existing transactions to day 7
-        config.transactions[0] = Transaction::Mortgage {
+        config.transactions[0] = Generator::Mortgage {
             deduction_amount: dec!(123.45),
             deduction_day: 7,
             from: MAIN_ACCOUNT.to_string(),
             to: MORTGAGE_ACCOUNT.to_string(),
         };
-        config.transactions[1] = Transaction::Salary {
+        config.transactions[1] = Generator::Salary {
             amount: dec!(2000.00),
             day: 7,
             to: MAIN_ACCOUNT.to_string(),
         };
         
         // Add transfer on same day
-        config.transactions.push(Transaction::Transfer {
+        config.transactions.push(Generator::Transfer {
             amount: dec!(500.00),
             day: 7,
             from: MAIN_ACCOUNT.to_string(),
@@ -814,7 +814,7 @@ start_date: "2025-01-01"
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
         assert_eq!(config.transactions.len(), 1);
         
-        if let Transaction::Transfer { amount, day, from, to } = &config.transactions[0] {
+        if let Generator::Transfer { amount, day, from, to } = &config.transactions[0] {
             assert_eq!(*amount, dec!(250.00));
             assert_eq!(*day, 10);
             assert_eq!(from, "main");
@@ -829,13 +829,13 @@ start_date: "2025-01-01"
         let mut config = create_test_accounts(5); // Mortgage on day 5, salary on day 6
         // Clear existing interest transaction and add a new one for day 10
         config.transactions = vec![
-            Transaction::Mortgage {
+            Generator::Mortgage {
                 deduction_amount: dec!(123.45),
                 deduction_day: 5,
                 from: MAIN_ACCOUNT.to_string(),
                 to: MORTGAGE_ACCOUNT.to_string(),
             },
-            Transaction::Interest {
+            Generator::Interest {
                 rate: dec!(6.0), // 6% annual rate
                 day: 10,
                 account: MORTGAGE_ACCOUNT.to_string(),
@@ -862,7 +862,7 @@ start_date: "2025-01-01"
     fn test_mortgage_payment_limited_by_available_balance() {
         let mut config = create_test_accounts_with_main_balance(5, Some(dec!(100.0)));
         // Set up a scenario where the mortgage payment exceeds the available balance
-        config.transactions[0] = Transaction::Mortgage {
+        config.transactions[0] = Generator::Mortgage {
             deduction_amount: dec!(500.00), // Try to deduct £500
             deduction_day: 5,
             from: MAIN_ACCOUNT.to_string(),
@@ -887,7 +887,7 @@ start_date: "2025-01-01"
     fn test_mortgage_payment_with_negative_balance() {
         // Set up a scenario where the account already has a negative balance
         let mut config = create_test_accounts_with_main_balance(5, Some(dec!(-50.00)));
-        config.transactions[0] = Transaction::Mortgage {
+        config.transactions[0] = Generator::Mortgage {
             deduction_amount: dec!(200.00),
             deduction_day: 5,
             from: MAIN_ACCOUNT.to_string(),
@@ -915,7 +915,7 @@ start_date: "2025-01-01"
         let mut config = create_test_accounts(15); // No mortgage/salary on test day
         
         // Add tithe transaction
-        config.transactions.push(Transaction::Tithe {
+        config.transactions.push(Generator::Tithe {
             percentage: dec!(10.0), // 10% tithe
             day: 10,
             from: MAIN_ACCOUNT.to_string(),
@@ -952,17 +952,17 @@ start_date: "2025-01-01"
         
         let config = Config {
             transactions: vec![
-                Transaction::Salary {
+                Generator::Salary {
                     amount: dec!(2000.00),
                     day: 6,
                     to: MAIN_ACCOUNT.to_string(),
                 },
-                Transaction::Salary {
+                Generator::Salary {
                     amount: dec!(1500.00),
                     day: 15,
                     to: MAIN_ACCOUNT.to_string(),
                 },
-                Transaction::Tithe {
+                Generator::Tithe {
                     percentage: dec!(10.0), // 10% tithe
                     day: 20,
                     from: MAIN_ACCOUNT.to_string(),
@@ -998,20 +998,20 @@ start_date: "2025-01-01"
         let mut config = create_test_accounts(30);
         
         // Add multiple tithe transactions
-        config.transactions.push(Transaction::Tithe {
+        config.transactions.push(Generator::Tithe {
             percentage: dec!(10.0),
             day: 10,
             from: MAIN_ACCOUNT.to_string(),
             to: CHARITY_EXPENDITURE.to_string(),
         });
         
-        config.transactions.push(Transaction::Salary {
+        config.transactions.push(Generator::Salary {
             amount: dec!(1000.00),
             day: 15,
             to: MAIN_ACCOUNT.to_string(),
         });
         
-        config.transactions.push(Transaction::Tithe {
+        config.transactions.push(Generator::Tithe {
             percentage: dec!(10.0),
             day: 20,
             from: MAIN_ACCOUNT.to_string(),
@@ -1043,7 +1043,7 @@ start_date: "2025-01-01"
         
         // Remove the default salary transaction
         config.transactions = vec![
-            Transaction::Tithe {
+            Generator::Tithe {
                 percentage: dec!(10.0),
                 day: 10,
                 from: MAIN_ACCOUNT.to_string(),
@@ -1079,7 +1079,7 @@ start_date: "2025-01-01"
         let config: Config = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
         assert_eq!(config.transactions.len(), 1);
         
-        if let Transaction::Tithe { percentage, day, from, to } = &config.transactions[0] {
+        if let Generator::Tithe { percentage, day, from, to } = &config.transactions[0] {
             assert_eq!(*percentage, dec!(10.0));
             assert_eq!(*day, 15);
             assert_eq!(from, "main");
@@ -1093,7 +1093,7 @@ start_date: "2025-01-01"
     fn test_tithe_with_different_percentage() {
         let mut config = create_test_accounts(15);
         
-        config.transactions.push(Transaction::Tithe {
+        config.transactions.push(Generator::Tithe {
             percentage: dec!(5.0), // 5% tithe
             day: 10,
             from: MAIN_ACCOUNT.to_string(),
