@@ -13,7 +13,6 @@ const CHARITY_EXPENDITURE: &str = "charity_expenditure";
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Config {
-    #[serde(rename = "transactions")]
     generators: Vec<Generator>,
     accounts: std::collections::HashMap<String, Decimal>,
     #[serde(default = "default_currency_symbol")]
@@ -251,14 +250,7 @@ fn compute_next_day_balances_with_tithe(
     (new_balances, salary_accumulator)
 }
 
-fn compute_next_day_balances(
-    config: &Config,
-    balances: &std::collections::HashMap<String, Decimal>,
-    date: chrono::NaiveDate,
-) -> std::collections::HashMap<String, Decimal> {
-    let (new_balances, _) = compute_next_day_balances_with_tithe(config, balances, date, Decimal::ZERO);
-    new_balances
-}
+
 
 fn print_balance_named(name: &str, date: chrono::NaiveDate, balance: Decimal, currency_symbol: &str) {
     println!(
@@ -427,7 +419,7 @@ mod tests {
     #[test]
     fn test_config_parsing() {
         let yaml = r#"
-transactions:
+generators:
   - type: mortgage
     deduction_amount: 123.45
     deduction_day: 1
@@ -471,10 +463,11 @@ start_date: "2025-01-01"
 
     fn make_accounts_for_day(mortgage_deduction_day: u32, test_day: u32) -> HashMap<String, Decimal> {
         let config = create_test_accounts(mortgage_deduction_day);
-        let next = compute_next_day_balances(
+        let (next, _) = compute_next_day_balances_with_tithe(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, test_day).unwrap(),
+            Decimal::ZERO,
         );
         next
     }
@@ -499,10 +492,11 @@ start_date: "2025-01-01"
             day: 7,
             to: MAIN_ACCOUNT.to_string()
         });
-        let next = compute_next_day_balances(
+        let (next, _) = compute_next_day_balances_with_tithe(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 7).unwrap(),
+            Decimal::ZERO,
         );
         assert_eq!(next[MAIN_ACCOUNT], dec!(10000.00) + dec!(1500.00) - dec!(123.45));
     }
@@ -515,10 +509,11 @@ start_date: "2025-01-01"
             day: 15,
             to: MAIN_ACCOUNT.to_string()
         });
-        let next = compute_next_day_balances(
+        let (next, _) = compute_next_day_balances_with_tithe(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 15).unwrap(),
+            Decimal::ZERO,
         );
         assert_eq!(next[MAIN_ACCOUNT], dec!(10000.00) + dec!(1000.00));
     }
@@ -533,7 +528,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_config_parsing_with_salary() {
         let yaml = r#"
-transactions:
+generators:
   - type: mortgage
     deduction_amount: 123.45
     deduction_day: 1
@@ -690,10 +685,11 @@ start_date: "2025-01-01"
             to: savings_account.to_string(),
         });
         
-        let next = compute_next_day_balances(
+        let (next, _) = compute_next_day_balances_with_tithe(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
+            Decimal::ZERO,
         );
         
         assert_eq!(next[MAIN_ACCOUNT], dec!(10000.00) - dec!(500.00));
@@ -713,10 +709,11 @@ start_date: "2025-01-01"
             to: savings_account.to_string(),
         });
         
-        let next = compute_next_day_balances(
+        let (next, _) = compute_next_day_balances_with_tithe(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(), // Not transfer day
+            Decimal::ZERO,
         );
         
         // No transfer should occur
@@ -747,10 +744,11 @@ start_date: "2025-01-01"
             to: investment_account.to_string(),
         });
         
-        let next = compute_next_day_balances(
+        let (next, _) = compute_next_day_balances_with_tithe(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
+            Decimal::ZERO,
         );
         
         assert_eq!(next[MAIN_ACCOUNT], dec!(10000.00) - dec!(300.00) - dec!(200.00));
@@ -786,10 +784,11 @@ start_date: "2025-01-01"
             to: savings_account.to_string(),
         });
         
-        let next = compute_next_day_balances(
+        let (next, _) = compute_next_day_balances_with_tithe(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 7).unwrap(),
+            Decimal::ZERO,
         );
         
         // Main account: start + salary - mortgage - transfer
@@ -800,7 +799,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_config_parsing_with_transfer() {
         let yaml = r#"
-transactions:
+generators:
   - type: transfer
     amount: 250.00
     day: 10
@@ -844,10 +843,11 @@ start_date: "2025-01-01"
             },
         ];
         
-        let next = compute_next_day_balances(
+        let (next, _) = compute_next_day_balances_with_tithe(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 10).unwrap(),
+            Decimal::ZERO,
         );
         
         // Calculate expected interest: 500000 * (6% / 12 / 100) = 500000 * 0.005 = 2500
@@ -870,10 +870,11 @@ start_date: "2025-01-01"
             to: MORTGAGE_ACCOUNT.to_string(),
         };
         
-        let next = compute_next_day_balances(
+        let (next, _) = compute_next_day_balances_with_tithe(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
+            Decimal::ZERO,
         );
         
         // Should only deduct the available £100, leaving balance at zero
@@ -895,10 +896,11 @@ start_date: "2025-01-01"
             to: MORTGAGE_ACCOUNT.to_string(),
         };
         
-        let next = compute_next_day_balances(
+        let (next, _) = compute_next_day_balances_with_tithe(
             &config,
             &config.accounts,
             chrono::NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
+            Decimal::ZERO,
         );
         
         // Should not deduct anything when balance is already negative
@@ -1066,7 +1068,7 @@ start_date: "2025-01-01"
     #[test]
     fn test_config_parsing_with_tithe() {
         let yaml = r#"
-transactions:
+generators:
   - type: tithe
     percentage: 10.0
     day: 15
